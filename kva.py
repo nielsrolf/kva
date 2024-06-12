@@ -8,13 +8,17 @@ from datetime import datetime
 import shutil
 
 
-class File:
-    def __init__(self, path: str, hash: Optional[str] = None):
+class File(dict):
+    def __init__(self, path: str, hash: Optional[str] = None, filename: Optional[str] = None, src: Optional[str] = None):
         self.path = path
         self.hash = hash or self._calculate_hash(path)
+        self.filename = filename or os.path.basename(path)
+        self.src = src or path
+        
+        super().__init__(path=self.path, hash=self.hash, filename=self.filename, src=self.src)
     
     def __repr__(self):
-        return f'File(path={self.path!r})'
+        return f'File(path={self.path!r}, hash={self.hash!r}, filename={self.filename!r})'
 
     @staticmethod
     def _calculate_hash(path: str) -> str:
@@ -23,6 +27,7 @@ class File:
             buf = f.read()
             hasher.update(buf)
         return hasher.hexdigest()
+
 
 
 def _deep_merge(a: Any, b: Any) -> Any:
@@ -116,6 +121,9 @@ class DB:
 
     def latest(self, columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True) -> Union[Dict[str, Any], pd.DataFrame]:
         """Get the latest values for the specified columns."""
+        if columns == '*':
+            columns = df = pd.DataFrame(self.data).columns
+            
         single_column = None
         if isinstance(columns, str):
             single_column = columns
