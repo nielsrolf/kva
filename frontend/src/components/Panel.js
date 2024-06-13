@@ -1,47 +1,33 @@
-import React from 'react';
+import React, { useState } from 'react';
 import YamlPanel from './YamlPanel';
 import ImagePanel from './ImagePanel';
 import TablePanel from './TablePanel';
 import LinePlotPanel from './LinePlotPanel';
+import '../styles.css';
 
 const Panel = ({ name, data, type, index }) => {
-  if (type === 'lineplot' && index) {
-    return (
-      <div>
-        <h2>{name}</h2>
-        <LinePlotPanel data={data} index={index} />
-      </div>
-    );
-  } else if (type === 'data' && index) {
-    return (
-      <div>
-        <h2>{name}</h2>
-        <TablePanel data={data} index={index} />
-      </div>
-    );
-  } else if (type === 'data') {
-    if (typeof data === 'object' && !Array.isArray(data)) {
-      return (
-        <div>
-          <h2>{name}</h2>
-          <YamlPanel data={data} />
-        </div>
-      );
-    }
-  } else if (type === 'image' && data && data.path && data.filename) {
-    return (
-      <div>
-        <h2>{name}</h2>
-        <ImagePanel data={data} />
-      </div>
-    );
-  }
+  const [isOpen, setIsOpen] = useState(true);
 
-  // Add more types as needed
+  const togglePanel = () => {
+    setIsOpen(!isOpen);
+  };
+
   return (
-    <div>
-      <h2>{name}</h2>
-      <pre>{JSON.stringify(data, null, 2)}</pre>
+    <div className="panel">
+      <div className="panel-header" onClick={togglePanel}>
+        <h2>{name}</h2>
+        <button>{isOpen ? 'Hide' : 'Show'}</button>
+      </div>
+      {isOpen && (
+        <div className={`panel-content ${isOpen ? '' : 'hidden'}`}>
+          {type === 'lineplot' && index && <LinePlotPanel data={data} index={index} />}
+          {type === 'data' && index && <TablePanel data={data} index={index} />}
+          {type === 'data' && !index && <YamlPanel data={data} />}
+          {type === 'image' && data && data.path && data.filename && <ImagePanel data={data} />}
+          {/* Add more types as needed */}
+          {type !== 'lineplot' && type !== 'data' && type !== 'image' && <pre>{JSON.stringify(data, null, 2)}</pre>}
+        </div>
+      )}
     </div>
   );
 };

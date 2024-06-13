@@ -1,7 +1,6 @@
-// src/components/YamlPanel.js
-
 import React, { useState } from 'react';
 import ImagePanel from './ImagePanel';
+import '../styles.css';
 
 const isImageData = (data) => {
   return data && typeof data === 'object' && 'path' in data && 'filename' in data;

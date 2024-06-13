@@ -1,6 +1,5 @@
-// src/components/TablePanel.js
-
 import React, { useState } from 'react';
+import '../styles.css';
 
 const TablePanel = ({ data, index }) => {
   const [currentPage, setCurrentPage] = useState(1);
