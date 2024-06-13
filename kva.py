@@ -29,6 +29,25 @@ class File(dict):
         return hasher.hexdigest()
 
 
+class Folder(dict):
+    def __init__(self, path: str):
+        super().__init__()
+        self.path = path
+        self._populate()
+
+    def _populate(self):
+        for item in os.listdir(self.path):
+            item_path = os.path.join(self.path, item)
+            if os.path.isdir(item_path):
+                self[item] = Folder(item_path)
+            else:
+                self[item] = File(item_path)
+
+    def __repr__(self):
+        return f'Folder(path={self.path!r}, contents={list(self.keys())!r})'
+
+
+
 def _deep_merge(a: Any, b: Any) -> Any:
     if isinstance(a, dict) and isinstance(b, dict):
         for key in b:
@@ -113,7 +132,8 @@ class DB:
         os.makedirs(dest_dir, exist_ok=True)
 
         dest_path = os.path.join(dest_dir, os.path.basename(file.src))
-        shutil.copy(file.src, dest_path)
+        if not os.path.exists(dest_path):
+            shutil.copy(file.src, dest_path)
         file.path = os.path.relpath(dest_path, self.storage)
 
         return {

@@ -25,7 +25,7 @@ const FilePanel = ({ data }) => {
         Your browser does not support the video tag.
       </video>;
     }
-    if (['txt', 'csv', 'log'].includes(fileExtension)) {
+    if (['txt', 'csv', 'log', 'md', 'py', 'html', 'css', 'js', 'ts', 'sh'].includes(fileExtension)) {
       return <iframe src={filePath} title={data.filename} style={{ width: '100%', height: '400px', border: 'none' }} />;
     }
     return <a href={filePath} download={data.filename}>Download {data.filename}</a>;
