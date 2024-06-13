@@ -9,6 +9,8 @@ from typing import Dict, Any, List, Union
 from pydantic import BaseModel
 import pandas as pd
 from kva import kva, File
+from fastapi.responses import FileResponse
+
 
 app = FastAPI()
 
@@ -39,8 +41,11 @@ def load_config(config_path: str) -> ViewConfig:
     return ViewConfig(**config)
 
 def get_run_data(keys: Dict[str, Any], columns: List[str], index: str = None):
-    db = kva.get(**keys)
-    return db.latest(columns, index=index)
+    try:
+        db = kva.get(**keys)
+        return db.latest(columns, index=index)
+    except KeyError:
+        return "No data available"
 
 def replace_nan_with_none(data: Any) -> Any:
     if isinstance(data, float) and (pd.isna(data) or data == float('inf') or data == float('-inf')):
@@ -67,10 +72,14 @@ async def view_run(path: str):
         columns = panel['columns']
         index = panel.get('index')
         data = get_run_data(keys, columns, index)
-        run_data[panel['name']] = jsonable_encoder(data)
+        run_data[panel['name']] = {
+            'data': jsonable_encoder(data),
+            'type': panel['type'],
+            'index': panel.get('index')
+        }
     
     return JSONResponse(content=run_data)
-
+    
 @app.get("/runs")
 async def list_runs():
     global config_path
@@ -82,6 +91,14 @@ async def list_runs():
     runs = df[config.index].drop_duplicates().to_dict(orient='records')
     run_paths = ['/'.join(str(run[key]) for key in config.index) for run in runs]
     return JSONResponse(content={"runs": run_paths})
+
+@app.get("/store/artifacts/{file_path:path}")
+async def serve_image(file_path: str):
+    file_location = os.path.join(os.getenv('KVA_STORAGE', '~/.kva'), "artifacts", file_path)
+    if not os.path.exists(file_location):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_location)
+
 
 app.mount("/", StaticFiles(directory="frontend/build", html=True), name="frontend")
 

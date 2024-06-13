@@ -11,11 +11,16 @@ panels:
       index: step
       type: lineplot # Plot the data - use index as x-axis and in this case 'loss' on the y-axis. This only works when the datatype of all columns if numerical
 
+    - name: Samples
+      columns: ['output']
+      index: ['input']
+      type: data
+
     - name: image-example
       columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
       type: data # Data displays images / audios / videos directly when a value is of type File
     
-    - name: images-over-training
-      columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
-      index: ['step']
-      type: slider/data # Slider selects the step, at each step we display with the standard data displayer
+    # - name: images-over-training
+    #   columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
+    #   slider: 'step'
+    #   type: data # Slider selects the step, at each step we display with the standard data displayer

@@ -20,9 +20,10 @@ const RunDetails = () => {
   return (
     <div>
       <h1>Run Details</h1>
-      {Object.keys(data).map((panelName, index) => (
-        <Panel key={index} name={panelName} data={data[panelName]} />
-      ))}
+      {Object.keys(data).map((panelName, index) => {
+        const panel = data[panelName];
+        return <Panel key={index} name={panelName} data={panel.data} type={panel.type} index={panel.index} />;
+      })}
     </div>
   );
 };
