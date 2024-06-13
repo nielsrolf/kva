@@ -44,5 +44,5 @@ for step in range(100):
         generate_mandelbrot_image(step)
         kva.log(image=File('mandelbrot.png'))
 
-df = kva.get(run_id="example-1").latest(['loss', 'square'], index='step')
+df = kva.get(run_id="Mandelbrot").latest(['loss', 'square'], index='step')
 print(df)

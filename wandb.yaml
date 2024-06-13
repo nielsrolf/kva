@@ -1,0 +1,31 @@
+index:
+  - run_id
+
+panels: 
+    - name: summary # Title of the panel
+      columns: '*' # Columns to display
+      type: data # This means: we simply see a foldable yaml or table, depending on whether an index is selected or not
+
+    - name: Loss # Title
+      columns: ['loss', 'square']
+      index: timestamp
+      type: lineplot # Plot the data - use index as x-axis and in this case 'loss' on the y-axis. This only works when the datatype of all columns if numerical
+
+    - name: Loss (table) # Title
+      columns: ['loss', 'square']
+      index: timestamp
+      type: data 
+
+    - name: Samples
+      columns: ['output']
+      index: ['input']
+      type: data
+
+    - name: image-example
+      columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
+      type: data # Data displays images / audios / videos directly when a value is of type File
+    
+    - name: images-over-training
+      columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
+      type: data 
+      slider: 'step' # Slider selects the step, at each step we display with the standard data displayer

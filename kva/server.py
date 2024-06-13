@@ -100,7 +100,9 @@ async def list_runs():
 @app.get("/artifacts/{file_path:path}")
 async def serve_image(file_path: str):
     file_location = os.path.join(os.getenv('KVA_STORAGE', '~/.kva'), "artifacts", file_path)
+    file_location = os.path.expanduser(file_location)
     if not os.path.exists(file_location):
+        print(f"File not found: {file_location}")
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_location)
 

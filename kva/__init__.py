@@ -6,7 +6,7 @@ import pandas as pd
 from contextlib import contextmanager
 from datetime import datetime
 import shutil
-
+import uuid
 
 class File(dict):
     def __init__(self, src: str, path: Optional[str] = None, hash: Optional[str] = None, filename: Optional[str] = None):
@@ -102,9 +102,13 @@ class DB:
         """Initialize a run with given context data."""
         self.context_data.update(self.default_context)
         self.context_data.update(data)
+        if not 'run_id' in self.context_data:
+            self.context_data['run_id'] = uuid.uuid4().hex[:8]
+        return self
 
-    def log(self, **data: Dict[str, Any]) -> None:
+    def log(self, data: Dict[str, Any]={}, **more_daya) -> None:
         """Log data to the store."""
+        data = {**data, **more_daya}
         resolved = {k: (v() if callable(v) else v) for k, v in self.context_data.items()}
         resolved.update(data)
 
@@ -236,6 +240,38 @@ class DB:
     def _default_timestamp(self) -> str:
         """Get the current timestamp."""
         return datetime.now().isoformat()
+    
+    # For wandb compatibility
+    @property
+    def config(self):
+        return self.latest('config')
+    
+    @property
+    def summary(self):
+        return self.latest('*')
+
 
 # Create a default DB instance for convenience
 kva = DB()
+
+
+def init(**data: Dict[str, Any]) -> DB:
+    return kva.init(**data)
+
+def log(data: Dict[str, Any]={}, **more_daya):
+    kva.log(data)
+
+def get(**conditions: Dict[str, Any]) -> 'DB':
+    return kva.get(**conditions)
+
+def latest(columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True) -> Union[Dict[str, Any], pd.DataFrame]:
+    return kva.latest(columns, index=index, deep_merge=deep_merge)
+
+def finish() -> None:
+    kva.finish()
+
+def context(**data: Dict[str, Any]) -> None:
+    kva.context(**data)
+
+def filter(accept_row) -> 'DB':
+    return kva.filter(accept_row)

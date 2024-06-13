@@ -52,7 +52,7 @@ artifacts/{filehash}/filename.extension
 # Docs
 ## Core methods
 
-### `kva.log(**data)`
+### `kva.log(data)`
 Appends `dict(**data, **init_data)` to the append-only database.
 Every value that is a `kva.File` (or a subclass thereof) is additionally saved.
 
