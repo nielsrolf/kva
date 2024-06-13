@@ -10,8 +10,9 @@ import shutil
 import uuid
 
 class Table(pd.DataFrame):
-    def add_row(self, **kwargs):
-        new_row = pd.DataFrame([kwargs], columns=self.columns)
+    def add_row(self, *values, **data):
+        data = dict(zip(self.columns, values), **data)
+        new_row = pd.DataFrame([data], columns=self.columns)
         self._update_inplace(new_row)
 
 
@@ -97,6 +98,7 @@ class DB:
     
     def __init__(self, storage: Optional[str] = None, data=None):
         self.storage = storage or os.getenv('KVA_STORAGE', '~/.kva')
+        print(f"Using storage: {self.storage}")
         self.storage = os.path.expanduser(self.storage)
         os.makedirs(self.storage, exist_ok=True)
         self.storage = os.path.expanduser(self.storage)
