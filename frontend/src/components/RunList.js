@@ -8,7 +8,7 @@ const RunList = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    axios.get('http://0.0.0.0:8000/runs')
+    axios.get('/runs')
       .then(response => {
         setRuns(response.data.runs);
       })

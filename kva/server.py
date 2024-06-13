@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Union
 from pydantic import BaseModel
 import pandas as pd
 from kva import kva, File
+from fastapi.responses import HTMLResponse
 
 app = FastAPI()
 
@@ -114,11 +115,18 @@ async def serve_file(file_path: str):
         return FileResponse(file_location, media_type='text/csv')
     return FileResponse(file_location)
 
-app.mount("/", StaticFiles(
-    directory=os.path.join(
-        os.path.dirname(__file__), "../frontend/build"
-    ), html=True), name="frontend")
 
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    static_path = os.path.join(os.path.dirname(__file__), "../frontend/build", full_path)
+    if os.path.exists(static_path) and os.path.isfile(static_path):
+        return FileResponse(static_path)
+    frontend_path = os.path.join(os.path.dirname(__file__), "../frontend/build", "index.html")
+    if os.path.exists(frontend_path):
+        return HTMLResponse(content=open(frontend_path).read(), status_code=200)
+    else:
+        raise HTTPException(status_code=404, detail="Frontend not found")
+    
 
 def main():
     import uvicorn
@@ -134,7 +142,7 @@ def main():
         print(f"Config file not found: {config_path}")
         sys.exit(1)
     
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=7575)
 
 
 if __name__ == "__main__":
