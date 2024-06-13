@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import FilePanel from './FilePanel';
 import '../styles.css';
 
@@ -6,8 +6,25 @@ const isImageData = (data) => {
   return data && typeof data === 'object' && 'path' in data && 'filename' in data;
 };
 
-const YamlPanel = ({ data, level = 0 }) => {
+const YamlPanel = ({ data, level = 0, initiallyOpen = false }) => {
   const [openState, setOpenState] = useState({});
+
+  useEffect(() => {
+    if (initiallyOpen) {
+      const initialOpenState = {};
+      const setOpenRecursive = (data, currentLevel) => {
+        Object.keys(data).forEach((key) => {
+          if (typeof data[key] === 'object' && data[key] !== null) {
+            initialOpenState[key] = true;
+            setOpenRecursive(data[key], currentLevel + 1);
+          }
+        });
+      };
+      setOpenRecursive(data, level);
+      setOpenState(initialOpenState);
+    }
+  }, [data, level, initiallyOpen]);
+
   const paddingLeft = level * 20;
 
   const toggleOpen = (key) => {
@@ -38,7 +55,7 @@ const YamlPanel = ({ data, level = 0 }) => {
               <div onClick={() => toggleOpen(key)} style={{ cursor: 'pointer', fontWeight: 'bold' }}>
                 {isOpen ? '▼' : '▶'} {key}
               </div>
-              {isOpen && <YamlPanel data={value} level={level + 1} />}
+              {isOpen && <YamlPanel data={value} level={level + 1} initiallyOpen={initiallyOpen} />}
             </div>
           );
         } else {

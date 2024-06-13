@@ -4,15 +4,14 @@ import PanelTypeSwitch from './PanelTypeSwitch';
 const SliderPanel = ({ data, slider, type, index }) => {
   const [currentStep, setCurrentStep] = useState(0);
 
-  console.log(data);
-
   const steps = data.map(item => item[slider]);
   const uniqueSteps = [...new Set(steps)].sort((a, b) => a - b);
+
   const handleSliderChange = (event) => {
     setCurrentStep(parseInt(event.target.value, 10));
   };
 
-  const currentData = data.find(item => item[slider] === uniqueSteps[currentStep]);
+  const currentData = data.filter(item => item[slider] === uniqueSteps[currentStep]);
 
   return (
     <div>
@@ -24,11 +23,16 @@ const SliderPanel = ({ data, slider, type, index }) => {
         onChange={handleSliderChange}
         className="slider"
       />
-      {currentData && <PanelTypeSwitch 
-          data={data} 
-          type={type} 
-          index={index} 
-        />}
+      <div>Step: {uniqueSteps[currentStep]}</div>
+      {currentData.map((item, index) => (
+        <PanelTypeSwitch
+          key={index}
+          data={item}
+          type={type}
+          index={index}
+          initiallyOpen={true} // Ensure the YamlPanel opens all levels by default
+        />
+      ))}
     </div>
   );
 };

@@ -17,9 +17,16 @@ $(cat ui.md)
 A basic version is partly implemented:
 $(concatsrc frontend/src/ --ext .js)
 
-Can you implement the functionality where a panel has a slider - i.e. this one?
+Now I am working on this slider feature:
    
     - name: images-over-training
       columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
       type: data 
-      slider: 'step' # Slider selects the step, at each step we display with the standard data displayer"
+      slider: 'step' # Slider selects the step, at each step we display with the standard data displayer
+
+Currently, this is broken:
+- It renders what seems to be two YamlPanel views - an initial one, then a slider, then the same again
+- I think this is because we don't check if !slider in the Panel
+- but there is also the issue that the SliderPanel that should be rendered currently looks like a normal YamlPanel with a slider that has no effect
+
+Can you fix this?"
