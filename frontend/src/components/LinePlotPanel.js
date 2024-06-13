@@ -3,7 +3,11 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 
+const colors = ["#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#387908", "#e8c3b9", "#d0ed57", "#8e44ad", "#3498db"];
+
 const LinePlotPanel = ({ data, index }) => {
+  const keys = Object.keys(data[0] || {}).filter(key => key !== index);
+
   return (
     <ResponsiveContainer width="100%" height={400}>
       <LineChart
@@ -17,8 +21,14 @@ const LinePlotPanel = ({ data, index }) => {
         <YAxis />
         <Tooltip />
         <Legend />
-        {Object.keys(data[0] || {}).map(key => (
-          key !== index ? <Line key={key} type="monotone" dataKey={key} stroke="#8884d8" activeDot={{ r: 8 }} /> : null
+        {keys.map((key, idx) => (
+          <Line 
+            key={key} 
+            type="monotone" 
+            dataKey={key} 
+            stroke={colors[idx % colors.length]} 
+            activeDot={{ r: 8 }} 
+          />
         ))}
       </LineChart>
     </ResponsiveContainer>
