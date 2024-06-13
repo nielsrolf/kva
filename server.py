@@ -41,11 +41,8 @@ def load_config(config_path: str) -> ViewConfig:
     return ViewConfig(**config)
 
 def get_run_data(keys: Dict[str, Any], columns: List[str], index: str = None):
-    try:
-        db = kva.get(**keys)
-        return db.latest(columns, index=index)
-    except KeyError:
-        return "No data available"
+    db = kva.get(**keys)
+    return db.latest(columns, index=index)
 
 def replace_nan_with_none(data: Any) -> Any:
     if isinstance(data, float) and (pd.isna(data) or data == float('inf') or data == float('-inf')):
@@ -77,7 +74,7 @@ async def view_run(path: str):
             'type': panel['type'],
             'index': panel.get('index')
         }
-    
+    print(run_data)
     return JSONResponse(content=run_data)
     
 @app.get("/runs")

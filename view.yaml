@@ -7,9 +7,14 @@ panels:
       type: data # This means: we simply see a foldable yaml or table, depending on whether an index is selected or not
 
     - name: Loss # Title
-      columns: ['loss']
+      columns: ['loss', 'square']
       index: step
       type: lineplot # Plot the data - use index as x-axis and in this case 'loss' on the y-axis. This only works when the datatype of all columns if numerical
+
+    - name: Loss (table) # Title
+      columns: ['loss', 'square']
+      index: step
+      type: data 
 
     - name: Samples
       columns: ['output']

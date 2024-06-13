@@ -42,16 +42,11 @@ For local storage, set:
 export KVA_STORAGE='~/.kva' # Default
 ```
 
-For online storage, set:
-```
-export KVA_STORAGE='https://supabase.endoint.org'
-```
-
 ## Using with git or git-lfs
 When configured to stora data locally, kva stores data in a git friendly way:
 ```
 data.jsonl
-artifacts/{filehash}/filename.fileextension
+artifacts/{filehash}/filename.extension
 ```
 
 # Docs

@@ -2,10 +2,17 @@ import React from 'react';
 import YamlPanel from './YamlPanel';
 import ImagePanel from './ImagePanel';
 import TablePanel from './TablePanel';
+import LinePlotPanel from './LinePlotPanel';
 
 const Panel = ({ name, data, type, index }) => {
-  console.log('Panel', name, data, type, index);
-  if (type === 'data' && index) {
+  if (type === 'lineplot' && index) {
+    return (
+      <div>
+        <h2>{name}</h2>
+        <LinePlotPanel data={data} index={index} />
+      </div>
+    );
+  } else if (type === 'data' && index) {
     return (
       <div>
         <h2>{name}</h2>

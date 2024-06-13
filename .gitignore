@@ -1,0 +1,7 @@
+example.py
+*.png
+__pycache__/
+store/
+table.py
+todo
+ui.md

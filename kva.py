@@ -29,20 +29,30 @@ class File(dict):
         return hasher.hexdigest()
 
 
-
 def _deep_merge(a: Any, b: Any) -> Any:
     if isinstance(a, dict) and isinstance(b, dict):
         for key in b:
             a[key] = _deep_merge(a.get(key), b[key])
         return a
     return b
-    
+
 
 def latest_or_none(series: pd.Series, *functions) -> Any:
+    series = series[~series.isnull()]
     val = series.iloc[-1] if not series.empty else None
     for func in functions:
         val = func(val)
     return val
+
+
+def get_latest_nonnull(df, index, columns):
+    def last_nonnull(series):
+        return series.dropna().iloc[-1] if not series.dropna().empty else None
+    
+    grouped = df.groupby(index)
+    result = grouped[columns].apply(lambda group: group.apply(last_nonnull))
+    
+    return result.reset_index()
 
 
 class DB:
@@ -122,7 +132,7 @@ class DB:
     def latest(self, columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True) -> Union[Dict[str, Any], pd.DataFrame]:
         """Get the latest values for the specified columns."""
         if columns == '*':
-            columns = df = pd.DataFrame(self.data).columns
+            columns = pd.DataFrame(self.data).columns
             
         single_column = None
         if isinstance(columns, str):
@@ -131,8 +141,13 @@ class DB:
 
         if index:
             df = pd.DataFrame(self.data)
-            latest_indexed = df.groupby(index).apply(lambda x: latest_or_none(x[columns], self._replace_files))
-            return latest_indexed.reset_index()
+            if (isinstance(index, str) and index not in df.columns) or (isinstance(index, list) and not all(i in df.columns for i in index)):
+                # We return an empty dataframe if the index column is not present
+                print(f"Index column '{index}' not found in the data.")
+                return pd.DataFrame()
+
+            df = get_latest_nonnull(df, index, columns)
+            return df
 
         latest_data = {}
         for row in self.data:
