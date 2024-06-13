@@ -1,15 +1,44 @@
-import React from 'react';
+// frontend/src/components/FilePanel.js
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import TablePanel from './TablePanel';
 
 const FilePanel = ({ data }) => {
-  console.log(data);
-  if (!data.path) {
-    return <div>Invalid file data: {JSON.stringify(data)}</div>;
-  }
+  const [csvData, setCsvData] = useState(null);
 
-  const filePath = `http://localhost:8000/${data.path}`;
-  const fileExtension = data.filename.split('.').pop().toLowerCase();
+  useEffect(() => {
+    if (data.filename.endsWith('.csv')) {
+      axios.get(`http://localhost:8000/${data.path}`)
+        .then(response => {
+          const rows = response.data.split('\n').map(row => row.split(','));
+          const headers = rows[0];
+          const content = rows.slice(1).map(row => {
+            const rowData = {};
+            headers.forEach((header, index) => {
+              rowData[header] = row[index];
+            });
+            return rowData;
+          });
+          setCsvData(content);
+        })
+        .catch(error => {
+          console.error('There was an error fetching the CSV file!', error);
+        });
+    }
+  }, [data]);
 
   const renderFileContent = () => {
+    if (csvData) {
+      return <TablePanel data={csvData} />;
+    }
+
+    if (data.filename.endsWith('.csv')) {
+      return <div>Loading CSV data...</div>;
+    }
+
+    const filePath = `http://localhost:8000/${data.path}`;
+    const fileExtension = data.filename.split('.').pop().toLowerCase();
+
     if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
       return <img src={filePath} alt={data.filename} style={{ maxWidth: '100%', height: 'auto' }} />;
     }
@@ -25,7 +54,7 @@ const FilePanel = ({ data }) => {
         Your browser does not support the video tag.
       </video>;
     }
-    if (['txt', 'csv', 'log', 'md', 'py', 'html', 'css', 'js', 'ts', 'sh'].includes(fileExtension)) {
+    if (['txt', 'log', 'md', 'py', 'html', 'css', 'js', 'ts', 'sh'].includes(fileExtension)) {
       return <iframe src={filePath} title={data.filename} style={{ width: '100%', height: '400px', border: 'none' }} />;
     }
     return <a href={filePath} download={data.filename}>Download {data.filename}</a>;

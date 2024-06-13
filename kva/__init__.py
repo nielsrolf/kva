@@ -1,3 +1,4 @@
+# kva/__init__.py
 import os
 import json
 import hashlib
@@ -8,12 +9,19 @@ from datetime import datetime
 import shutil
 import uuid
 
+class Table(pd.DataFrame):
+    def add_row(self, **kwargs):
+        new_row = pd.DataFrame([kwargs], columns=self.columns)
+        self._update_inplace(new_row)
+
+
 class File(dict):
-    def __init__(self, src: str, path: Optional[str] = None, hash: Optional[str] = None, filename: Optional[str] = None):
+    def __init__(self, src: Optional[str] = None, path: Optional[str] = None, hash: Optional[str] = None, filename: Optional[str] = None, base_path: Optional[str] = None):
         self.src = src
         self.path = path
         self.hash = hash or self._calculate_hash(src)
         self.filename = filename or os.path.basename(src)
+        self.base_path = base_path
         
         super().__init__(src=self.src, path=self.path, hash=self.hash, filename=self.filename)
     
@@ -27,6 +35,11 @@ class File(dict):
             buf = f.read()
             hasher.update(buf)
         return hasher.hexdigest()
+    
+    def as_df(self):
+        if self.base_path is None or self.path is None:
+            raise ValueError("Can only get the dataframe after a table has been logged.")
+        return pd.read_csv(os.path.join(self.base_path, self.path))
 
 
 class Folder(dict):
@@ -104,17 +117,19 @@ class DB:
         self.context_data.update(data)
         if not 'run_id' in self.context_data:
             self.context_data['run_id'] = uuid.uuid4().hex[:8]
-        return self
+        return self.get(**data)
 
-    def log(self, data: Dict[str, Any]={}, **more_daya) -> None:
+    def log(self, data: Dict[str, Any]={}, **more_data) -> None:
         """Log data to the store."""
-        data = {**data, **more_daya}
+        data = {**data, **more_data}
         resolved = {k: (v() if callable(v) else v) for k, v in self.context_data.items()}
         resolved.update(data)
 
         def process_file(value):
             if isinstance(value, File):
                 return self._handle_file(value)
+            elif isinstance(value, pd.DataFrame):
+                return self._handle_dataframe(value)
             elif isinstance(value, dict):
                 return {k: process_file(v) for k, v in value.items()}
             elif isinstance(value, list):
@@ -140,6 +155,7 @@ class DB:
         if not os.path.exists(dest_path):
             shutil.copy(file.src, dest_path)
         file.path = os.path.relpath(dest_path, self.storage)
+        file.base_path = self.storage
 
         return {
             'src': file.src,
@@ -148,10 +164,29 @@ class DB:
             'filename': os.path.basename(file.src)
         }
 
+    def _handle_dataframe(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Handle DataFrame storage as CSV and return a dictionary for logging."""
+        artifacts_dir = os.path.join(self.storage, 'artifacts')
+        os.makedirs(artifacts_dir, exist_ok=True)
+
+        file_hash = hashlib.sha256(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+        dest_dir = os.path.join(artifacts_dir, file_hash)
+        os.makedirs(dest_dir, exist_ok=True)
+
+        filename = f"{uuid.uuid4().hex[:8]}.csv"
+        dest_path = os.path.join(dest_dir, filename)
+        df.to_csv(dest_path, index=False)
+
+        return {
+            'path': os.path.relpath(dest_path, self.storage),
+            'hash': file_hash,
+            'filename': filename
+        }
+
     def filter(self, accept_row) -> 'DB':
         """Filter rows based on a function."""
         db = DB(storage=self.storage, data=[row for row in self.data if accept_row(row)])
-        db.init(**self.context_data)
+        db.context_data = self.context_data.copy()
         return db
     
     def get(self, **conditions: Dict[str, Any]) -> 'DB':
@@ -204,8 +239,8 @@ class DB:
     def _replace_files(self, data: Union[Dict[str, Any], List[Any]]) -> Union[Dict[str, Any], List[Any]]:
         """Replace file dictionaries with File objects."""
         if isinstance(data, dict):
-            if 'path' in data and 'hash' in data and 'filename' in data and 'src' in data:
-                return File(**data)
+            if 'path' in data and 'hash' in data and 'filename' in data:
+                return File(**data, base_path=self.storage)
             else:
                 return {k: self._replace_files(v) for k, v in data.items()}
         elif isinstance(data, list):
@@ -258,8 +293,8 @@ kva = DB()
 def init(**data: Dict[str, Any]) -> DB:
     return kva.init(**data)
 
-def log(data: Dict[str, Any]={}, **more_daya):
-    kva.log(data)
+def log(data: Dict[str, Any]={}, **more_data):
+    kva.log(data, **more_data)
 
 def get(**conditions: Dict[str, Any]) -> 'DB':
     return kva.get(**conditions)

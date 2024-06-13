@@ -5,6 +5,11 @@ panels:
     - name: summary # Title of the panel
       columns: '*' # Columns to display
       type: data # This means: we simply see a foldable yaml or table, depending on whether an index is selected or not
+    
+    - name: Tables
+      columns: ['dummy_table', 'wandb_like_table'] # Columns to display
+      type: data # This means: we simply see a foldable yaml or table, depending on whether an index is selected or not
+      slider: 'step'
 
     - name: Loss # Title
       columns: ['loss', 'square']

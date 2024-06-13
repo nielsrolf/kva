@@ -1,16 +1,15 @@
+# kva/server.py
 import os
 import yaml
 import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from typing import Dict, Any, List, Union
 from pydantic import BaseModel
 import pandas as pd
 from kva import kva, File
-from fastapi.responses import FileResponse
-
 
 app = FastAPI()
 
@@ -76,6 +75,8 @@ async def view_run(path: str):
             else:
                 index = [slider, index]
         data = get_run_data(keys, columns, index)
+        if len(data) == 0:
+            continue
         run_data[panel['name']] = {
             'data': jsonable_encoder(data),
             'type': panel['type'],
@@ -98,12 +99,14 @@ async def list_runs():
     return JSONResponse(content={"runs": run_paths})
 
 @app.get("/artifacts/{file_path:path}")
-async def serve_image(file_path: str):
+async def serve_file(file_path: str):
     file_location = os.path.join(os.getenv('KVA_STORAGE', '~/.kva'), "artifacts", file_path)
     file_location = os.path.expanduser(file_location)
     if not os.path.exists(file_location):
         print(f"File not found: {file_location}")
         raise HTTPException(status_code=404, detail="File not found")
+    if file_path.endswith(".csv"):
+        return FileResponse(file_location, media_type='text/csv')
     return FileResponse(file_location)
 
 app.mount("/", StaticFiles(
