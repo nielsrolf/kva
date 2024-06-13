@@ -9,16 +9,16 @@ import shutil
 
 
 class File(dict):
-    def __init__(self, path: str, hash: Optional[str] = None, filename: Optional[str] = None, src: Optional[str] = None):
+    def __init__(self, src: str, path: Optional[str] = None, hash: Optional[str] = None, filename: Optional[str] = None):
+        self.src = src
         self.path = path
-        self.hash = hash or self._calculate_hash(path)
-        self.filename = filename or os.path.basename(path)
-        self.src = src or path
+        self.hash = hash or self._calculate_hash(src)
+        self.filename = filename or os.path.basename(src)
         
-        super().__init__(path=self.path, hash=self.hash, filename=self.filename, src=self.src)
+        super().__init__(src=self.src, path=self.path, hash=self.hash, filename=self.filename)
     
     def __repr__(self):
-        return f'File(path={self.path!r}, hash={self.hash!r}, filename={self.filename!r})'
+        return f'File(src={self.src!r}, path={self.path!r}, hash={self.hash!r}, filename={self.filename!r})'
 
     @staticmethod
     def _calculate_hash(path: str) -> str:
@@ -46,12 +46,17 @@ def latest_or_none(series: pd.Series, *functions) -> Any:
 
 
 def get_latest_nonnull(df, index, columns):
+    columns = [c for c in columns if c in df.columns]
     def last_nonnull(series):
         return series.dropna().iloc[-1] if not series.dropna().empty else None
     
     grouped = df.groupby(index)
     result = grouped[columns].apply(lambda group: group.apply(last_nonnull))
-    
+    # Filter out rows where all columns are None
+    result = result.dropna(how='all')
+    # If no columns are left, return an empty dataframe
+    if result.empty:
+        return pd.DataFrame()
     return result.reset_index()
 
 
@@ -107,14 +112,15 @@ class DB:
         dest_dir = os.path.join(artifacts_dir, file.hash)
         os.makedirs(dest_dir, exist_ok=True)
 
-        dest_path = os.path.join(dest_dir, os.path.basename(file.path))
-        shutil.copy(file.path, dest_path)
+        dest_path = os.path.join(dest_dir, os.path.basename(file.src))
+        shutil.copy(file.src, dest_path)
+        file.path = os.path.relpath(dest_path, self.storage)
 
         return {
-            'path': os.path.relpath(dest_path, self.storage),
+            'src': file.src,
+            'path': file.path,
             'hash': file.hash,
-            'filename': os.path.basename(file.path),
-            'src': file.path
+            'filename': os.path.basename(file.src)
         }
 
     def filter(self, accept_row) -> 'DB':
@@ -174,7 +180,7 @@ class DB:
         """Replace file dictionaries with File objects."""
         if isinstance(data, dict):
             if 'path' in data and 'hash' in data and 'filename' in data and 'src' in data:
-                return File(path=os.path.join(self.storage, data['path']))
+                return File(**data)
             else:
                 return {k: self._replace_files(v) for k, v in data.items()}
         elif isinstance(data, list):

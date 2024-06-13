@@ -22,7 +22,16 @@ const RunDetails = () => {
       <h1>Run Details</h1>
       {Object.keys(data).map((panelName, index) => {
         const panel = data[panelName];
-        return <Panel key={index} name={panelName} data={panel.data} type={panel.type} index={panel.index} />;
+        return (
+          <Panel 
+            key={index} 
+            name={panelName} 
+            data={panel.data} 
+            type={panel.type} 
+            index={panel.index} 
+            slider={panel.slider}  // Pass the slider property
+          />
+        );
       })}
     </div>
   );

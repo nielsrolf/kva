@@ -1,8 +1,9 @@
 import React from 'react';
 
 const FilePanel = ({ data }) => {
+  console.log(data);
   if (!data.path) {
-    return <div>Invalid file data</div>;
+    return <div>Invalid file data: {JSON.stringify(data)}</div>;
   }
 
   const filePath = `http://localhost:8000/${data.path}`;

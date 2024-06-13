@@ -17,7 +17,9 @@ $(cat ui.md)
 A basic version is partly implemented:
 $(concatsrc frontend/src/ --ext .js)
 
-Can you add some basic styling? I.e.
-- table cells should have a border
-- panels should be foldable (hide an entire panel)
-- Use some nicer fonts and do some general styling (not black on white, etc)"
+Can you implement the functionality where a panel has a slider - i.e. this one?
+   
+    - name: images-over-training
+      columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
+      type: data 
+      slider: 'step' # Slider selects the step, at each step we display with the standard data displayer"

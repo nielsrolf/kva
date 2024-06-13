@@ -68,11 +68,19 @@ async def view_run(path: str):
     for panel in config.panels:
         columns = panel['columns']
         index = panel.get('index')
+        if slider := panel.get('slider'):
+            if index is None:
+                index = slider
+            elif isinstance(index, list):
+                index = [slider] + index
+            else:
+                index = [slider, index]
         data = get_run_data(keys, columns, index)
         run_data[panel['name']] = {
             'data': jsonable_encoder(data),
             'type': panel['type'],
-            'index': panel.get('index')
+            'index': panel.get('index'),
+            'slider': panel.get('slider')
         }
     print(run_data)
     return JSONResponse(content=run_data)
@@ -89,7 +97,7 @@ async def list_runs():
     run_paths = ['/'.join(str(run[key]) for key in config.index) for run in runs]
     return JSONResponse(content={"runs": run_paths})
 
-@app.get("/store/artifacts/{file_path:path}")
+@app.get("/artifacts/{file_path:path}")
 async def serve_image(file_path: str):
     file_location = os.path.join(os.getenv('KVA_STORAGE', '~/.kva'), "artifacts", file_path)
     if not os.path.exists(file_location):

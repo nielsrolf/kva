@@ -25,7 +25,7 @@ panels:
       columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
       type: data # Data displays images / audios / videos directly when a value is of type File
     
-    # - name: images-over-training
-    #   columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
-    #   slider: 'step'
-    #   type: data # Slider selects the step, at each step we display with the standard data displayer
+    - name: images-over-training
+      columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
+      type: data 
+      slider: 'step' # Slider selects the step, at each step we display with the standard data displayer
