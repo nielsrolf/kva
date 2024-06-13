@@ -5,6 +5,7 @@ import '../styles.css';
 
 const RunList = () => {
   const [runs, setRuns] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     axios.get('http://0.0.0.0:8000/runs')
@@ -16,11 +17,19 @@ const RunList = () => {
       });
   }, []);
 
+  const filteredRuns = runs.filter(run => run.match(new RegExp(searchTerm, 'i')));
+
   return (
     <div>
       <h1>Run List</h1>
+      <input
+        type="text"
+        placeholder="Search runs..."
+        value={searchTerm}
+        onChange={e => setSearchTerm(e.target.value)}
+      />
       <ul>
-        {runs.map((run, index) => (
+        {filteredRuns.map((run, index) => (
           <li key={index}>
             <Link to={`/view/${run}`}>{run}</Link>
           </li>

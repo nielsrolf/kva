@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom'; // Import useNavigate
 import axios from 'axios';
 import Panel from './Panel';
 
 const RunDetails = () => {
   const { path } = useParams();
   const [data, setData] = useState({});
+  const navigate = useNavigate(); // Initialize useNavigate
 
   useEffect(() => {
     axios.get(`http://localhost:8000/view/${path}`)
@@ -19,6 +20,7 @@ const RunDetails = () => {
 
   return (
     <div>
+      <button onClick={() => navigate('/')}>Back to Run List</button> {/* Add Back Button */}
       <h1>Run Details</h1>
       {Object.keys(data).map((panelName, index) => {
         const panel = data[panelName];

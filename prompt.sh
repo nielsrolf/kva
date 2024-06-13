@@ -17,16 +17,6 @@ $(cat ui.md)
 A basic version is partly implemented:
 $(concatsrc frontend/src/ --ext .js)
 
-Now I am working on this slider feature:
-   
-    - name: images-over-training
-      columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
-      type: data 
-      slider: 'step' # Slider selects the step, at each step we display with the standard data displayer
-
-Currently, this is broken:
-- It renders what seems to be two YamlPanel views - an initial one, then a slider, then the same again
-- I think this is because we don't check if !slider in the Panel
-- but there is also the issue that the SliderPanel that should be rendered currently looks like a normal YamlPanel with a slider that has no effect
-
-Can you fix this?"
+Now I would like to make some small usability changes:
+- the first page should have a search/filter field where I can write regex strings like 'model*-version*'
+- On the detail page, there should be a button to go back to the list page"
