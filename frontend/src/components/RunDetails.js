@@ -9,7 +9,7 @@ const RunDetails = () => {
   const navigate = useNavigate(); // Initialize useNavigate
 
   useEffect(() => {
-    axios.get(`http://localhost:8000/view/${path}`)
+    axios.get(`/data/${path}`)
       .then(response => {
         setData(response.data);
       })

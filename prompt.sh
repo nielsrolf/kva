@@ -4,19 +4,22 @@ $(cat README.md)
 
 The backend pretty much works:
 
-# kva.py
-$(cat kva.py)
+# kva/__init__.py
+$(cat kva/__init__.py)
 
-# server.py
-$(cat server.py)
+# kva/server.py
+$(cat kva/server.py)
 
-
-Now, I am working on a simple UI:
-$(cat ui.md)
-
-A basic version is partly implemented:
+# UI
 $(concatsrc frontend/src/ --ext .js)
 
-Now I would like to make some small usability changes:
-- the first page should have a search/filter field where I can write regex strings like 'model*-version*'
-- On the detail page, there should be a button to go back to the list page"
+
+Now I would like to make it simpler to log tables. Consider this example:
+$(cat examples/tables.py)
+
+In order to make this work, we should do the following:
+- create a kva.Table class that is a subclass of a pd.DataFrame and has an interface compatible with the one in the example (this is the interface wandb tables have)
+- make it such that when DataFrames are logged, we save them as a CSV file and treat them like files
+- in the UI: in FilePanel, when a file is a CSV, render them as a table
+
+Can you implement this?"

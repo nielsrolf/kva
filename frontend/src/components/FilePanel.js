@@ -8,7 +8,7 @@ const FilePanel = ({ data }) => {
 
   useEffect(() => {
     if (data.filename.endsWith('.csv')) {
-      axios.get(`http://localhost:8000/${data.path}`)
+      axios.get(`/${data.path}`)
         .then(response => {
           const rows = response.data.split('\n').map(row => row.split(','));
           const headers = rows[0];
@@ -36,7 +36,7 @@ const FilePanel = ({ data }) => {
       return <div>Loading CSV data...</div>;
     }
 
-    const filePath = `http://localhost:8000/${data.path}`;
+    const filePath = `/${data.path}`;
     const fileExtension = data.filename.split('.').pop().toLowerCase();
 
     if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {

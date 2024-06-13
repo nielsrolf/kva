@@ -17,6 +17,10 @@ app = FastAPI()
 origins = [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:8000",
+    "http://0.0.0.0:8000",
+    # Just allow all origins for now
+    "*"
 ]
 
 app.add_middleware(
@@ -57,7 +61,7 @@ def jsonable_encoder(data: Any) -> Any:
         data = data.where(pd.notnull(data), None).to_dict(orient='records')
     return replace_nan_with_none(data)
 
-@app.get("/view/{path:path}")
+@app.get("/data/{path:path}")
 async def view_run(path: str):
     global config_path
     config = load_config(config_path)

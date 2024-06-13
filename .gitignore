@@ -7,3 +7,5 @@ todo
 ui.md
 kva.egg-info/
 backup/
+.DS_Store
+dev.py
