@@ -76,7 +76,7 @@ class DB:
         if not os.path.exists(self.db_file):
             with open(self.db_file, 'w') as f:
                 pass
-        self.data = data or self._load_data()
+        self.data = self._load_data() if data is None else data
 
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
