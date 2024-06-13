@@ -104,12 +104,16 @@ async def serve_image(file_path: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_location)
 
+app.mount("/", StaticFiles(
+    directory=os.path.join(
+        os.path.dirname(__file__), "../frontend/build"
+    ), html=True), name="frontend")
 
-app.mount("/", StaticFiles(directory="frontend/build", html=True), name="frontend")
 
-if __name__ == "__main__":
+def main():
     import uvicorn
     import sys
+    global config_path
     
     if len(sys.argv) != 3 or sys.argv[1] != '--view':
         print("Usage: python server.py --view path/to/view/config.yaml")
@@ -121,3 +125,7 @@ if __name__ == "__main__":
         sys.exit(1)
     
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    main()

@@ -82,6 +82,7 @@ def get_latest_nonnull(df, index, columns):
 class DB:
     def __init__(self, storage: Optional[str] = None, data=None):
         self.storage = storage or os.getenv('KVA_STORAGE', '~/.kva')
+        self.storage = os.path.expanduser(self.storage)
         os.makedirs(self.storage, exist_ok=True)
         self.storage = os.path.expanduser(self.storage)
         self.db_file = os.path.join(self.storage, 'data.jsonl')

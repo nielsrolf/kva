@@ -86,3 +86,42 @@ Basically another way of calling `with kva.context(**data)`:
 
 ### `kva.log_artifact(path)`
 - the same as: `kva.log(kva.File(path))`
+
+
+# UI
+Start the UI via:
+```
+python server.py --view path/to/view/config.yaml
+```
+
+A view config looks like this:
+```yaml
+index:
+    - project # This is just an example to show that index may consist of multiple columns
+    - run_id # this has the effect that for each unique index (i.e. fo each run_id), we see one link on the main UI
+
+# Once we click on a link, we see a details page on <url>/{project}/{run_id} with multiple panels
+panels: 
+    - name: summary # Title of the panel
+      columns: '*' # The data of each panel is corresponds to: kva.get(project=..., run_id=...).latest(columns=<specified in the panel>, index=<specified in the panel>)
+      type: data # This means: we simply see a foldable yaml or table, depending on whether an index is selected or not
+
+    - name: Loss # Title
+      columns: ['loss', 'square']
+      index: step
+      type: lineplot # Plot the data - use index as x-axis and in this case 'loss' on the y-axis. This only works when the datatype of all columns if numerical
+    
+    - name: samples # View for examples/llm_sampling.py
+      columns: ['output']
+      index: ['input']
+      type: data # Display the data as a table
+    
+    - name: image-example
+      columns: ['output'] # We assume that an image was logged as kva.log(output=File('image.png'))
+      type: data # Data displays images / audios / videos directly when a value is of type File
+    
+    - name: images-over-training
+      columns: ['image'] # We assume that an image was logged as kva.log(output=File('image.png'))
+      type: data 
+      slider: 'step' # Slider selects the step, at each step we display with the standard data displayer
+```
