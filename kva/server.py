@@ -44,6 +44,7 @@ def load_config(config_path: str) -> ViewConfig:
     return ViewConfig(**config)
 
 def get_run_data(keys: Dict[str, Any], columns: List[str], index: str = None):
+    kva.reload()
     db = kva.get(**keys)
     return db.latest(columns, index=index)
 

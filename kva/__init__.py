@@ -123,6 +123,9 @@ class DB:
         if not 'run_id' in self.context_data:
             self.context_data['run_id'] = uuid.uuid4().hex[:8]
         return self.get(**data)
+    
+    def reload(self):
+        self.data = self._load_data()
 
     def log(self, data: Dict[str, Any]={}, **more_data) -> None:
         """Log data to the store."""
