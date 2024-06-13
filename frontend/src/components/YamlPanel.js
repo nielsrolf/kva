@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import ImagePanel from './ImagePanel';
+import FilePanel from './FilePanel';
 import '../styles.css';
 
 const isImageData = (data) => {
@@ -29,7 +29,7 @@ const YamlPanel = ({ data, level = 0 }) => {
               <div onClick={() => toggleOpen(key)} style={{ cursor: 'pointer', fontWeight: 'bold' }}>
                 {isOpen ? '▼' : '▶'} {key}
               </div>
-              {isOpen && <ImagePanel data={value} />}
+              {isOpen && <FilePanel data={value} />}
             </div>
           );
         } else if (typeof value === 'object' && value !== null) {

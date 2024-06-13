@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import YamlPanel from './YamlPanel';
-import ImagePanel from './ImagePanel';
 import TablePanel from './TablePanel';
 import LinePlotPanel from './LinePlotPanel';
+import FilePanel from './FilePanel'; // Import the new FilePanel
 import '../styles.css';
 
 const Panel = ({ name, data, type, index }) => {
@@ -23,9 +23,10 @@ const Panel = ({ name, data, type, index }) => {
           {type === 'lineplot' && index && <LinePlotPanel data={data} index={index} />}
           {type === 'data' && index && <TablePanel data={data} index={index} />}
           {type === 'data' && !index && <YamlPanel data={data} />}
-          {type === 'image' && data && data.path && data.filename && <ImagePanel data={data} />}
+          {type === 'image' && data && data.path && data.filename && <FilePanel data={data} />}
+          {type === 'file' && data && data.path && data.filename && <FilePanel data={data} />}
           {/* Add more types as needed */}
-          {type !== 'lineplot' && type !== 'data' && type !== 'image' && <pre>{JSON.stringify(data, null, 2)}</pre>}
+          {type !== 'lineplot' && type !== 'data' && type !== 'file' && <pre>{JSON.stringify(data, null, 2)}</pre>}
         </div>
       )}
     </div>
