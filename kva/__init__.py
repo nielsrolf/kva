@@ -9,11 +9,15 @@ from datetime import datetime
 import shutil
 import uuid
 
+
+DEFAULT_STORAGE = '/workspace/kva_store' if os.path.exists('/workspace') else '~/.kva'
+
+
 class Table(pd.DataFrame):
     def add_row(self, *values, **data):
         data = dict(zip(self.columns, values), **data)
         new_row = pd.DataFrame([data], columns=self.columns)
-        self._update_inplace(new_row)
+        self._update_inplace(pd.concat([self, new_row], ignore_index=True))
 
 
 class File(dict):
@@ -97,7 +101,7 @@ class DB:
     _views = []
     
     def __init__(self, storage: Optional[str] = None, data=None):
-        self.storage = storage or os.getenv('KVA_STORAGE', '~/.kva')
+        self.storage = storage or os.getenv('KVA_STORAGE', DEFAULT_STORAGE)
         print(f"Using storage: {self.storage}")
         self.storage = os.path.expanduser(self.storage)
         os.makedirs(self.storage, exist_ok=True)
