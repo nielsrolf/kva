@@ -125,3 +125,8 @@ panels:
       type: data 
       slider: 'step' # Slider selects the step, at each step we display with the standard data displayer
 ```
+
+### Gallery
+![Loss and summary](images/1.png)
+![Image slider](images/2.png)
+![Table of text samples](images/3.png)
