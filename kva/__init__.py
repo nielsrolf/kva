@@ -93,6 +93,8 @@ def get_latest_nonnull(df, index, columns):
 
 
 class DB:
+    _views = []
+    
     def __init__(self, storage: Optional[str] = None, data=None):
         self.storage = storage or os.getenv('KVA_STORAGE', '~/.kva')
         self.storage = os.path.expanduser(self.storage)
@@ -110,6 +112,7 @@ class DB:
             with open(self.db_file, 'w') as f:
                 pass
         self.data = self._load_data() if data is None else data
+        DB._views.append(self)
 
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
@@ -141,7 +144,9 @@ class DB:
 
         with open(self.db_file, 'a') as f:
             f.write(json.dumps(processed_data) + '\n')
-        self.data.append(processed_data)
+        for view in DB._views:
+            if view.storage == self.storage:
+                view.data.append(processed_data)
 
     def _handle_file(self, file: File) -> Dict[str, Any]:
         """Handle file storage and return a dictionary for logging."""
