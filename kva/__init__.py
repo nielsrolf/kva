@@ -119,10 +119,6 @@ def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
-            obj = obj.to('cpu').detach().numpy()
-        except AttributeError:
-            pass
-        try:
             return obj.tolist()
         except AttributeError:
             pass
