@@ -1,18 +1,102 @@
 import pytest
-from kva import kva, File, Folder
+import torch
+import numpy as np
+from datetime import datetime
+import pickle
+import hydra
+from hydra import initialize, compose
+from hydra.core.config_store import ConfigStore
+from omegaconf import OmegaConf
 import os
-import pandas as pd
+from kva import kva, File
 import shutil
+import uuid
+from dataclasses import dataclass
+import pandas as pd
+import torch
+
+from kva import Folder
 
 # Fixture to create and clean up a test environment
 @pytest.fixture(scope="module", autouse=True)
 def setup_env():
-    os.environ['KVA_STORAGE'] = '/tmp/kva_test'
-    if os.path.exists('/tmp/kva_test'):
-        shutil.rmtree('/tmp/kva_test')
-    os.makedirs('/tmp/kva_test')
+    os.environ['KVA_STORAGE'] = '/tmp/kva_test_encoder'
+    if os.path.exists('/tmp/kva_test_encoder'):
+        shutil.rmtree('/tmp/kva_test_encoder')
+    os.makedirs('/tmp/kva_test_encoder')
     yield
-    shutil.rmtree('/tmp/kva_test')
+    shutil.rmtree('/tmp/kva_test_encoder')
+
+@dataclass
+class Config:
+    foo: str = "bar"
+    num: int = 42
+
+cs = ConfigStore.instance()
+cs.store(name="config", node=Config)
+
+def test_datetime_serialization():
+    kva.init(run_id="datetime-run")
+    now = datetime.now()
+    kva.log(datetime=now)
+    result = kva.get(run_id="datetime-run").latest('datetime')
+    assert result == now.isoformat(), "Datetime not serialized correctly"
+
+def test_torch_tensor_serialization():
+    kva.init(run_id="tensor-run")
+    tensor = torch.tensor([1, 2, 3])
+    kva.log(tensor=tensor)
+    result = kva.get(run_id="tensor-run").latest('tensor')
+    expected = tensor.numpy().tolist()
+    assert result == expected, "Torch tensor not serialized correctly"
+
+def test_numpy_array_serialization():
+    kva.init(run_id="numpy-run")
+    array = np.array([1, 2, 3])
+    kva.log(array=array)
+    result = kva.get(run_id="numpy-run").latest('array')
+    expected = array.tolist()
+    assert result == expected, "Numpy array not serialized correctly"
+
+def test_hydra_config_serialization():
+    with initialize(config_path=None):
+        config = compose(config_name="config")
+        kva.init(run_id="hydra-run")
+        kva.log(config=OmegaConf.to_container(config))
+        result = kva.get(run_id="hydra-run").latest('config')
+        assert isinstance(result, dict), "Hydra config not serialized correctly"
+
+def test_custom_object_serialization():
+    kva.init(run_id="custom-object-run")
+    custom_obj = {'key': 'value'}
+    kva.log(custom=custom_obj)
+    result = kva.get(run_id="custom-object-run").latest('custom')
+    assert isinstance(result, dict), "Custom object not serialized correctly"
+
+
+class CustomClass:
+    def __init__(self, name):
+        self.name = name
+        
+def test_pickle_serialization():
+    obj = CustomClass("test")
+    kva.init(run_id="pickle-run")
+    kva.log(custom_object=obj)
+    result = kva.get(run_id="pickle-run").latest('custom_object')
+    assert isinstance(result, File), "Pickle object not serialized as a file"
+
+
+def test_log_local_class_object():
+    class LocalClass:
+        def __init__(self, name):
+            self.name = name
+    kva.init(run_id="local-class-run")
+    obj = LocalClass("test")
+    kva.log(local_object=obj)
+    result = kva.get(run_id="local-class-run").latest('local_object')
+    assert result['name'] == "test", "Local class object not serialized correctly"
+    
+# Old tests
 
 def test_basic_logging():
     kva.init(run_id="test-run")

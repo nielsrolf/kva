@@ -8,6 +8,11 @@ from contextlib import contextmanager
 from datetime import datetime
 import shutil
 import uuid
+import pickle
+from logging import getLogger
+
+
+logger = getLogger(__name__)
 
 
 DEFAULT_STORAGE = '/workspace/kva_store' if os.path.exists('/workspace') else '~/.kva'
@@ -111,9 +116,52 @@ def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
     result = result.applymap(unpack)
     return result
 
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        try:
+            obj = obj.to('cpu').detach().numpy()
+        except AttributeError:
+            pass
+        try:
+            return obj.tolist()
+        except AttributeError:
+            pass
+        try:
+            return obj.isoformat()
+        except AttributeError:
+            pass
+        try:
+            return obj.to_container()
+        except AttributeError:
+            pass
+        try:
+            return self._handle_custom_object(obj)
+        except AttributeError:
+            pass
+        logger.warning(f"Object of type {type(obj)} with value {obj} is not JSON serializable.")
+        return obj.__dict__
+
+    def _handle_custom_object(self, obj):
+        # Pickle the object and store it as an artifact
+        file_path = self._pickle_object(obj)
+        file = File(src=file_path, path=os.path.relpath(file_path, kva.storage), filename=os.path.basename(file_path))
+        return file
+
+    def _pickle_object(self, obj):
+        # Generate a unique filename based on the object's class name and a UUID
+        filename = f'{obj.__class__.__name__}_{uuid.uuid4().hex}.pkl'
+        file_path = os.path.join(kva.storage, 'artifacts', filename)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+        with open(file_path, 'wb') as f:
+            pickle.dump(obj, f)
+
+        return file_path
+    
+
 class DB:
     _views = []
-    
+
     def __init__(self, storage: Optional[str] = None, data=None):
         self.storage = storage or os.getenv('KVA_STORAGE', DEFAULT_STORAGE)
         print(f"Using storage: {self.storage}")
@@ -164,12 +212,14 @@ class DB:
                 return value
 
         processed_data = {k: process_file(v) for k, v in resolved.items()}
+        
 
         with open(self.db_file, 'a') as f:
-            f.write(json.dumps(processed_data) + '\n')
+            serialized = json.dumps(processed_data, cls=CustomJSONEncoder)
+            f.write(serialized + '\n')
         for view in DB._views:
             if view.storage == self.storage:
-                view.data.append(processed_data)
+                view.data.append(json.loads(serialized))
 
     def _handle_file(self, file: File) -> Dict[str, Any]:
         """Handle file storage and return a dictionary for logging."""
@@ -312,8 +362,6 @@ class DB:
     @property
     def summary(self):
         return self.latest('*')
-
-
 # Create a default DB instance for convenience
 kva = DB()
 
