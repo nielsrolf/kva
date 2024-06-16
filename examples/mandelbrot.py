@@ -31,18 +31,18 @@ def generate_mandelbrot_image(num_iter):
     plt.close()
 
 
+if __name__ == "__main__":
+    kva.init(run_id="Mandelbrot")
+    kva.log(config={'foo': 'bar', 'hello': 'world'})
 
-kva.init(run_id="Mandelbrot")
-kva.log(config={'foo': 'bar', 'hello': 'world'})
 
+    for step in range(100):
+        kva.log(step=step, square=step**2)
+        kva.log(loss=1/(step+1))
 
-for step in range(100):
-    kva.log(step=step, square=step**2)
-    kva.log(loss=1/(step+1))
+        if step % 10 == 0:
+            generate_mandelbrot_image(step)
+            kva.log(image=File('mandelbrot.png'))
 
-    if step % 10 == 0:
-        generate_mandelbrot_image(step)
-        kva.log(image=File('mandelbrot.png'))
-
-df = kva.get(run_id="Mandelbrot").latest(['loss', 'square'], index='step')
-print(df)
+    df = kva.get(run_id="Mandelbrot").latest(['loss', 'square'], index='step')
+    print(df)

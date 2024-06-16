@@ -84,10 +84,6 @@ Basically another way of calling `with kva.context(**data)`:
 - subsequent calls to `kva.log(**other_data)` also log `**data`
 - therefore you can use it like this:
 
-### `kva.log_artifact(path)`
-- the same as: `kva.log(kva.File(path))`
-
-
 # UI
 Start the UI via:
 ```

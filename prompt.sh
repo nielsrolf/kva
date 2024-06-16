@@ -1,4 +1,4 @@
-echo "I am working on the following project:
+echo "I am working on the following project, and would like you to write some tests for it (using pytest)
 
 $(cat README.md)
 
@@ -10,11 +10,7 @@ $(cat kva/__init__.py)
 # kva/server.py
 $(cat kva/server.py)
 
-# UI
-$(concatsrc frontend/src/ --ext .js)
+# Examples
+$(concatsrc examples)
 
-
-I am currently having issues omn the RunDetail view when a table is being displayed: I get "react-dom.production.min.js:188 TypeError: t.slice is not a function" in this line:
-> const currentData = data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-Can you help me fix that?"
+Can you turn the examples into tests and add some more tests for anything you think is missing?"

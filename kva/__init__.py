@@ -85,7 +85,6 @@ def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
     - for each of the columns, the last non-null value of the group is taken
     The result is a dataframe with the specified index and columns, where the values are the last non-null values of the group.
     """
-    print(index, columns)
     columns = [col for col in columns if col in df.columns]
     if isinstance(index, str):
         index = [index]
@@ -110,9 +109,6 @@ def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
         return val
     
     result = result.applymap(unpack)
-    print(index, columns)
-    print(result)
-    print("----")
     return result
 
 class DB:
