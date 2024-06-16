@@ -110,7 +110,7 @@ async def list_runs():
 
 @app.get("/artifacts/{file_path:path}")
 async def serve_file(file_path: str):
-    file_location = os.path.join(os.getenv('KVA_STORAGE', '~/.kva'), "artifacts", file_path)
+    file_location = os.path.join(kva.storage, "artifacts", file_path)
     file_location = os.path.expanduser(file_location)
     if not os.path.exists(file_location):
         print(f"File not found: {file_location}")
@@ -177,7 +177,7 @@ def main():
     else:
         config_path = make_config()
     
-    uvicorn.run(app, host="0.0.0.0", port=7575)
+    uvicorn.run(app, host="0.0.0.0", port=9998)
 
 
 if __name__ == "__main__":
