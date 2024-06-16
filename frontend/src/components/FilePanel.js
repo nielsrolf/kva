@@ -1,7 +1,7 @@
-// frontend/src/components/FilePanel.js
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import TablePanel from './TablePanel';
+import Papa from 'papaparse';
 
 const FilePanel = ({ data }) => {
   const [csvData, setCsvData] = useState(null);
@@ -10,16 +10,16 @@ const FilePanel = ({ data }) => {
     if (data.filename.endsWith('.csv')) {
       axios.get(`/${data.path}`)
         .then(response => {
-          const rows = response.data.split('\n').map(row => row.split(','));
-          const headers = rows[0];
-          const content = rows.slice(1).map(row => {
-            const rowData = {};
-            headers.forEach((header, index) => {
-              rowData[header] = row[index];
-            });
-            return rowData;
+          Papa.parse(response.data, {
+            header: true,
+            dynamicTyping: true,
+            complete: (result) => {
+              setCsvData(result.data);
+            },
+            error: (error) => {
+              console.error('There was an error parsing the CSV file!', error);
+            }
           });
-          setCsvData(content);
         })
         .catch(error => {
           console.error('There was an error fetching the CSV file!', error);
