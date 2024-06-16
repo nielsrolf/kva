@@ -130,21 +130,52 @@ async def serve_frontend(full_path: str):
         return HTMLResponse(content=open(frontend_path).read(), status_code=200)
     else:
         raise HTTPException(status_code=404, detail="Frontend not found")
+
+
+def make_config():
+    config = {
+        "index": ["run_id"],
+        "panels": [
+            {
+                "name": "Summary",
+                "columns": "*",
+                "type": "data"
+            }
+        ]
+    }
+    df = pd.DataFrame(kva.data)
+    for col in df.columns:
+        if col in ['timestamp', 'run_id']:
+            continue
+        # For all scalars, add a line plot
+        if pd.api.types.is_numeric_dtype(df[col]):
+            index = 'step' if 'step' in df.columns else 'timestamp'
+            if col == 'step':
+                index = 'timestamp'
+            config['panels'].append({
+                "name": col,
+                "columns": [col],
+                "type": "lineplot",
+                "index": index
+            })
     
+    config_path = os.path.join(kva.storage, "default.yaml")
+    with open(config_path, 'w') as file:
+        yaml.dump(config, file)
+    return config_path
 
 def main():
     import uvicorn
     import sys
     global config_path
     
-    if len(sys.argv) != 3 or sys.argv[1] != '--view':
-        print("Usage: python server.py --view path/to/view/config.yaml")
-        sys.exit(1)
-    
-    config_path = sys.argv[2]
-    if not os.path.exists(config_path):
-        print(f"Config file not found: {config_path}")
-        sys.exit(1)
+    if len(sys.argv) == 3:
+        config_path = sys.argv[2]
+        if not os.path.exists(config_path):
+            print(f"Config file not found: {config_path}")
+            sys.exit(1)
+    else:
+        config_path = make_config()
     
     uvicorn.run(app, host="0.0.0.0", port=7575)
 
