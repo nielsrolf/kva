@@ -12,6 +12,9 @@ const PanelTypeSwitch = ({ data, type = 'data', index, slider, initiallyOpen = f
     return <SliderPanel data={data} slider={slider} type={type} index={index} />;
   }
 
+  console.log('data:', data)
+  console.log('index:', index)
+  console.log('type:', type)
   return (
     <div className={`panel-content`}>
       {type === 'lineplot' && index && <LinePlotPanel data={data} index={index} />}

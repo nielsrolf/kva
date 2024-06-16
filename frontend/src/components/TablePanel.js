@@ -14,6 +14,7 @@ const TablePanel = ({ data, index }) => {
     }
   };
 
+  console.log('data:', data);
   const currentData = data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (

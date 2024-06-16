@@ -74,28 +74,46 @@ def _deep_merge(a: Any, b: Any) -> Any:
     return b
 
 
-def latest_or_none(series: pd.Series, *functions) -> Any:
-    series = series[~series.isnull()]
-    val = series.iloc[-1] if not series.empty else None
-    for func in functions:
-        val = func(val)
-    return val
+class Container:
+    def __init__(self, val):
+        self.val = val
 
 
-def get_latest_nonnull(df, index, columns):
-    columns = [c for c in columns if c in df.columns]
-    def last_nonnull(series):
-        return series.dropna().iloc[-1] if not series.dropna().empty else None
-    
-    grouped = df.groupby(index)
-    result = grouped[columns].apply(lambda group: group.apply(last_nonnull))
-    # Filter out rows where all columns are None
-    result = result.dropna(how='all')
-    # If no columns are left, return an empty dataframe
-    if result.empty:
+def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
+    """Gets a dataframe and returns a new dataframe where:
+    - the df is grouped by the index columns
+    - for each of the columns, the last non-null value of the group is taken
+    The result is a dataframe with the specified index and columns, where the values are the last non-null values of the group.
+    """
+    print(index, columns)
+    columns = [col for col in columns if col in df.columns]
+    if isinstance(index, str):
+        index = [index]
+    index = [col for col in index if col in df.columns]
+    if not index or not columns:
         return pd.DataFrame()
-    return result.reset_index()
+    
+    def last_non_null(series):
+        val = series.dropna().iloc[-1] if not series.dropna().empty else None
+        if isinstance(val, dict):
+            return Container(val)
+        else:
+            return val
 
+    grouped = df.groupby(index)
+    result = grouped[columns].apply(lambda x: x.apply(last_non_null))
+    
+    # Unpack Container objects
+    def unpack(val):
+        if isinstance(val, Container):
+            return val.val
+        return val
+    
+    result = result.applymap(unpack)
+    print(index, columns)
+    print(result)
+    print("----")
+    return result
 
 class DB:
     _views = []
@@ -187,7 +205,7 @@ class DB:
         dest_dir = os.path.join(artifacts_dir, file_hash)
         os.makedirs(dest_dir, exist_ok=True)
 
-        filename = f"{uuid.uuid4().hex[:8]}.csv"
+        filename = f"table.csv"
         dest_path = os.path.join(dest_dir, filename)
         df.to_csv(dest_path, index=False)
 

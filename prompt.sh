@@ -1,4 +1,4 @@
-echo "I am working on the following experiment:
+echo "I am working on the following project:
 
 $(cat README.md)
 
@@ -14,12 +14,7 @@ $(cat kva/server.py)
 $(concatsrc frontend/src/ --ext .js)
 
 
-Now I would like to make it simpler to log tables. Consider this example:
-$(cat examples/tables.py)
+I am currently having issues omn the RunDetail view when a table is being displayed: I get "react-dom.production.min.js:188 TypeError: t.slice is not a function" in this line:
+> const currentData = data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-In order to make this work, we should do the following:
-- create a kva.Table class that is a subclass of a pd.DataFrame and has an interface compatible with the one in the example (this is the interface wandb tables have)
-- make it such that when DataFrames are logged, we save them as a CSV file and treat them like files
-- in the UI: in FilePanel, when a file is a CSV, render them as a table
-
-Can you implement this?"
+Can you help me fix that?"

@@ -60,7 +60,9 @@ def replace_nan_with_none(data: Any) -> Any:
 
 def jsonable_encoder(data: Any) -> Any:
     if isinstance(data, pd.DataFrame):
-        data = data.where(pd.notnull(data), None).to_dict(orient='records')
+        # data = data.where(pd.notnull(data), None).to_dict(orient='records')
+        data = data.dropna(how='all')
+        data = data.reset_index().to_dict(orient='records')
     return replace_nan_with_none(data)
 
 @app.get("/data/{path:path}")
@@ -89,19 +91,21 @@ async def view_run(path: str):
             'index': panel.get('index'),
             'slider': panel.get('slider')
         }
-    print(run_data)
+    print(json.dumps(run_data, indent=2))
     return JSONResponse(content=run_data)
     
 @app.get("/runs")
 async def list_runs():
     global config_path
     config = load_config(config_path)
+    kva.reload()
     df = pd.DataFrame(kva.data)
     if not all(col in df.columns for col in config.index):
         raise HTTPException(status_code=400, detail="Invalid index columns in config")
     
     runs = df[config.index].drop_duplicates().to_dict(orient='records')
     run_paths = ['/'.join(str(run[key]) for key in config.index) for run in runs]
+    print(run_paths)
     return JSONResponse(content={"runs": run_paths})
 
 @app.get("/artifacts/{file_path:path}")
