@@ -1,4 +1,5 @@
 # kva/__init__.py
+
 import os
 import json
 import hashlib
@@ -10,13 +11,13 @@ import shutil
 import uuid
 import pickle
 from logging import getLogger
-
+import subprocess
+import threading
 
 logger = getLogger(__name__)
 
-
 DEFAULT_STORAGE = '/workspace/kva_store' if os.path.exists('/workspace') else '~/.kva'
-
+git_semaphore = threading.Semaphore()
 
 class Table(pd.DataFrame):
     def add_row(self, *values, **data):
@@ -119,6 +120,10 @@ def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
+            obj = obj.to('cpu').detach().numpy()
+        except AttributeError:
+            pass
+        try:
             return obj.tolist()
         except AttributeError:
             pass
@@ -177,6 +182,7 @@ class DB:
                 pass
         self.data = self._load_data() if data is None else data
         DB._views.append(self)
+        self._setup_git()
 
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
@@ -325,6 +331,7 @@ class DB:
     def finish(self) -> None:
         """Finish the current run."""
         self.context_data.clear()
+        self.sync()
 
     @contextmanager
     def context(self, **data: Dict[str, Any]):
@@ -350,6 +357,35 @@ class DB:
         """Get the current timestamp."""
         return datetime.now().isoformat()
     
+    def _setup_git(self):
+        """Initialize the git repository if it doesn't exist."""
+        if not os.path.exists(os.path.join(self.storage, '.git')):
+            logger.warning(f"No git repository found at {self.storage}. Initializing a new repository.")
+            subprocess.run(['git', 'init'], cwd=self.storage)
+            subprocess.run(['git', 'lfs', 'install'], cwd=self.storage)
+            subprocess.run(['git', 'lfs', 'track', 'artifacts/*'], cwd=self.storage)
+            subprocess.run(['git', 'add', '.gitattributes'], cwd=self.storage)
+            subprocess.run(['git', 'commit', '-m', 'Initialize git repository with git-lfs'], cwd=self.storage)
+        
+    def sync(self):
+        """Commit and push changes to the git repository."""
+        with git_semaphore:
+            try:
+                subprocess.run(['git', 'add', 'data.jsonl'], cwd=self.storage)
+                subprocess.run(['git', 'add', 'artifacts'], cwd=self.storage)
+                subprocess.run(['git', 'commit', '-m', 'Sync data'], cwd=self.storage)
+                subprocess.run(['git', 'pull', '--rebase'], cwd=self.storage)
+                result = subprocess.run(['git', 'push'], cwd=self.storage, capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.warning(f"Failed to push changes: {result.stderr}")
+                if "No configured push destination" in result.stderr:
+                    logger.warning("No remote repository configured. Please set up a remote repository.")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Git operation failed: {e}")
+
+    def __del__(self):
+        self.sync()
+
     # For wandb compatibility
     @property
     def config(self):
