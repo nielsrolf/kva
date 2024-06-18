@@ -137,6 +137,8 @@ class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
             obj = obj.to("cpu").detach().numpy()
+        except TypeError:
+            obj = obj.to(dtype=torch.float32).to("cpu").detach().numpy()
         except AttributeError:
             pass
         try:
