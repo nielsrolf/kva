@@ -1,164 +1,26 @@
 # kva/__init__.py
 
-import os
-import json
+import atexit
 import hashlib
-from typing import Any, Dict, List, Union, Optional
-import pandas as pd
-from contextlib import contextmanager
-from datetime import datetime
-import shutil
-import uuid
+import json
+import os
 import pickle
-from logging import getLogger
+import shutil
 import subprocess
 import threading
+import uuid
+from contextlib import contextmanager
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+from glob import glob
 
-logger = getLogger(__name__)
+import pandas as pd
 
-DEFAULT_STORAGE = '/workspace/kva_store' if os.path.exists('/workspace') else '~/.kva'
+from kva.utils import (DEFAULT_STORAGE, CustomJSONEncoder, File, Folder,
+                       _deep_merge, get_latest_nonnull, logger, set_default_storage)
+
 git_semaphore = threading.Semaphore()
 
-class Table(pd.DataFrame):
-    def add_row(self, *values, **data):
-        data = dict(zip(self.columns, values), **data)
-        new_row = pd.DataFrame([data], columns=self.columns)
-        self._update_inplace(pd.concat([self, new_row], ignore_index=True))
-
-
-class File(dict):
-    def __init__(self, src: Optional[str] = None, path: Optional[str] = None, hash: Optional[str] = None, filename: Optional[str] = None, base_path: Optional[str] = None):
-        self.src = src
-        self.path = path
-        self.hash = hash or self._calculate_hash(src)
-        self.filename = filename or os.path.basename(src)
-        self.base_path = base_path
-        
-        super().__init__(src=self.src, path=self.path, hash=self.hash, filename=self.filename)
-    
-    def __repr__(self):
-        return f'File(src={self.src!r}, path={self.path!r}, hash={self.hash!r}, filename={self.filename!r})'
-
-    @staticmethod
-    def _calculate_hash(path: str) -> str:
-        hasher = hashlib.sha256()
-        with open(path, 'rb') as f:
-            buf = f.read()
-            hasher.update(buf)
-        return hasher.hexdigest()
-    
-    def as_df(self):
-        if self.base_path is None or self.path is None:
-            raise ValueError("Can only get the dataframe after a table has been logged.")
-        return pd.read_csv(os.path.join(self.base_path, self.path))
-
-
-class Folder(dict):
-    def __init__(self, path: str):
-        super().__init__()
-        self.path = path
-        self._populate()
-
-    def _populate(self):
-        for item in os.listdir(self.path):
-            item_path = os.path.join(self.path, item)
-            if os.path.isdir(item_path):
-                self[item] = Folder(item_path)
-            else:
-                self[item] = File(item_path)
-
-    def __repr__(self):
-        return f'Folder(path={self.path!r}, contents={list(self.keys())!r})'
-
-
-
-def _deep_merge(a: Any, b: Any) -> Any:
-    if isinstance(a, dict) and isinstance(b, dict):
-        for key in b:
-            a[key] = _deep_merge(a.get(key), b[key])
-        return a
-    return b
-
-
-class Container:
-    def __init__(self, val):
-        self.val = val
-
-
-def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
-    """Gets a dataframe and returns a new dataframe where:
-    - the df is grouped by the index columns
-    - for each of the columns, the last non-null value of the group is taken
-    The result is a dataframe with the specified index and columns, where the values are the last non-null values of the group.
-    """
-    columns = [col for col in columns if col in df.columns]
-    if isinstance(index, str):
-        index = [index]
-    index = [col for col in index if col in df.columns]
-    if not index or not columns:
-        return pd.DataFrame()
-    
-    def last_non_null(series):
-        val = series.dropna().iloc[-1] if not series.dropna().empty else None
-        if isinstance(val, dict):
-            return Container(val)
-        else:
-            return val
-
-    grouped = df.groupby(index)
-    result = grouped[columns].apply(lambda x: x.apply(last_non_null))
-    
-    # Unpack Container objects
-    def unpack(val):
-        if isinstance(val, Container):
-            return val.val
-        return val
-    
-    result = result.applymap(unpack)
-    return result
-
-class CustomJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        try:
-            obj = obj.to('cpu').detach().numpy()
-        except AttributeError:
-            pass
-        try:
-            return obj.tolist()
-        except AttributeError:
-            pass
-        try:
-            return obj.isoformat()
-        except AttributeError:
-            pass
-        try:
-            return obj.to_container()
-        except AttributeError:
-            pass
-        try:
-            return self._handle_custom_object(obj)
-        except AttributeError:
-            pass
-        logger.warning(f"Object of type {type(obj)} with value {obj} is not JSON serializable.")
-        return obj.__dict__
-
-    def _handle_custom_object(self, obj):
-        # Pickle the object and store it as an artifact
-        file_path = self._pickle_object(obj)
-        file = File(src=file_path, path=os.path.relpath(file_path, kva.storage), filename=os.path.basename(file_path))
-        return file
-
-    def _pickle_object(self, obj):
-        # Generate a unique filename based on the object's class name and a UUID
-        filename = f'{obj.__class__.__name__}_{uuid.uuid4().hex}.pkl'
-        file_path = os.path.join(kva.storage, 'artifacts', filename)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-        with open(file_path, 'wb') as f:
-            pickle.dump(obj, f)
-
-        return file_path
-    
 
 class DB:
     _views = []
@@ -169,7 +31,7 @@ class DB:
         self.storage = os.path.expanduser(self.storage)
         os.makedirs(self.storage, exist_ok=True)
         self.storage = os.path.expanduser(self.storage)
-        self.db_file = os.path.join(self.storage, 'data.jsonl')
+        self.db_file = os.path.join(self.storage, f'data_{datetime.now().isoformat()}.jsonl')
         os.makedirs(os.path.dirname(self.db_file), exist_ok=True)
         self.context_data = {}
         self.context_stack = []
@@ -180,9 +42,22 @@ class DB:
         if not os.path.exists(self.db_file):
             with open(self.db_file, 'w') as f:
                 pass
-        self.data = self._load_data() if data is None else data
+        
+        # self.data = self._load_data() if data is None else data
+        self._data = data
+        self._logged_data = []
+    
+        self.accept_row = lambda row: True
         DB._views.append(self)
+        
         self._setup_git()
+        atexit.register(self._auto_sync)
+    
+    @property
+    def data(self):
+        if self._data is None:
+            self._data = self._load_data()
+        return self._data + self._logged_data
 
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
@@ -193,7 +68,7 @@ class DB:
         return self.get(**data)
     
     def reload(self):
-        self.data = self._load_data()
+        self._data = self._load_data()
 
     def log(self, data: Dict[str, Any]={}, **more_data) -> None:
         """Log data to the store."""
@@ -218,10 +93,12 @@ class DB:
 
         with open(self.db_file, 'a') as f:
             serialized = json.dumps(processed_data, cls=CustomJSONEncoder)
+            deserialized = json.loads(serialized)
             f.write(serialized + '\n')
         for view in DB._views:
             if view.storage == self.storage:
-                view.data.append(json.loads(serialized))
+                if view.accept_row(deserialized):
+                    view._logged_data.append(deserialized)
 
     def _handle_file(self, file: File) -> Dict[str, Any]:
         """Handle file storage and return a dictionary for logging."""
@@ -267,6 +144,7 @@ class DB:
         """Filter rows based on a function."""
         db = DB(storage=self.storage, data=[row for row in self.data if accept_row(row)])
         db.context_data = self.context_data.copy()
+        db.accept_row = accept_row
         return db
     
     def get(self, **conditions: Dict[str, Any]) -> 'DB':
@@ -313,8 +191,11 @@ class DB:
             return latest_data
 
     def _load_data(self) -> List[Dict[str, Any]]:
-        with open(self.db_file, 'r') as f:
-            return [json.loads(line) for line in f if line.strip()]
+        data = []
+        for datapath in glob(os.path.join(self.storage, '*.jsonl')):
+            with open(datapath, 'r') as f:
+                data += [json.loads(line) for line in f if line.strip()]
+        return data
 
     def _replace_files(self, data: Union[Dict[str, Any], List[Any]]) -> Union[Dict[str, Any], List[Any]]:
         """Replace file dictionaries with File objects."""
@@ -383,10 +264,18 @@ class DB:
             except subprocess.CalledProcessError as e:
                 logger.error(f"Git operation failed: {e}")
 
-    def __del__(self):
-        self.sync()
+    def _auto_sync(self):
+        if self == kva:
+            try:
+                self.sync()
+            except Exception as e:
+                logger.error(f"Auto sync failed: {e}")
 
     # For wandb compatibility
+    @property
+    def id(self):
+        return self.latest('run_id')
+    
     @property
     def config(self):
         return self.latest('config')
