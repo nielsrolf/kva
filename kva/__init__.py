@@ -249,15 +249,12 @@ class DB:
         """Commit and push changes to the git repository."""
         with git_semaphore:
             try:
-                subprocess.run(['git', 'add', 'data.jsonl'], cwd=self.storage)
-                subprocess.run(['git', 'add', 'artifacts'], cwd=self.storage)
+                subprocess.run(['git', 'add', '.'], cwd=self.storage)
                 subprocess.run(['git', 'commit', '-m', 'Sync data'], cwd=self.storage)
                 subprocess.run(['git', 'pull', '--rebase'], cwd=self.storage)
                 result = subprocess.run(['git', 'push'], cwd=self.storage, capture_output=True, text=True)
                 if result.returncode != 0:
-                    logger.warning(f"Failed to push changes: {result.stderr}")
-                if "No configured push destination" in result.stderr:
-                    logger.warning("No remote repository configured. Please set up a remote repository.")
+                    logger.info(f"Failed to push changes: {result.stderr}")
             except subprocess.CalledProcessError as e:
                 logger.error(f"Git operation failed: {e}")
 
