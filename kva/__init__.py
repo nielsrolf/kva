@@ -16,7 +16,7 @@ from glob import glob
 
 import pandas as pd
 
-from kva.utils import (DEFAULT_STORAGE, CustomJSONEncoder, File, Folder,
+from kva.utils import (DEFAULT_STORAGE, CustomJSONEncoder, File, Folder, Table
                        _deep_merge, get_latest_nonnull, logger, set_default_storage)
 
 git_semaphore = threading.Semaphore()
