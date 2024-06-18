@@ -39,9 +39,6 @@ class DB:
             'step': self._default_step,
             'timestamp': self._default_timestamp
         }
-        if not os.path.exists(self.db_file):
-            with open(self.db_file, 'w') as f:
-                pass
         
         # self.data = self._load_data() if data is None else data
         self._data = data
