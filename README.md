@@ -32,7 +32,7 @@ print(kva.get(run_id="some-run").latest('loss', index='step')) # Identical to: .
 
 ## Install
 ```
-pip install kva
+pip install git+https://github.com/nielsrolf/kva
 ```
 
 ## Configure backend
