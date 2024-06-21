@@ -14,7 +14,7 @@ from hydra import compose, initialize
 from hydra.core.config_store import ConfigStore
 from omegaconf import OmegaConf
 
-from kva import File, Folder, kva, set_default_storage
+from kva import File, LogFile, Folder, kva, set_default_storage
 
 
 # Fixture to create and clean up a test environment
@@ -213,6 +213,23 @@ def test_as_df_method(setup_env):
     kva.log(step=1, df=df)
     retrieved_df = kva.get(run_id="test-as-df").latest("df").as_df()
     pd.testing.assert_frame_equal(retrieved_df, df)
+
+
+def test_logfile(setup_env):
+    kva.init(run_id="test-logfile-run")
+    log_src = __file__
+    kva.log(logfile=LogFile(log_src))
+
+    logfile = kva.get(run_id="test-logfile-run").latest("logfile")
+    assert logfile["src"] == log_src
+    assert logfile["path"] == "artifacts/logfiles/test-logfile-run/test_core.py"
+    
+    kva.finish()
+
+    logfile = kva.get(run_id="test-logfile-run").latest("logfile")
+    assert logfile["src"] == log_src
+    assert logfile["path"] != "artifacts/logfiles/test-logfile-run/test_core.py"
+    assert os.path.exists(os.path.join(kva.storage, logfile["path"]))
 
 
 if __name__ == "__main__":

@@ -119,6 +119,22 @@ async def list_runs():
     return JSONResponse(content={"runs": run_paths})
 
 
+@app.get("/artifacts/logfiles/{run_id}/{filename}")
+async def serve_log_file(run_id: str, filename: str):
+    values = kva.get(run_id=run_id).latest("*")
+    for k, v in values.items():
+        try:
+            assert v['filename'] == filename
+            log_file_path = v['src']
+            break
+        except:
+            pass
+    if not os.path.exists(log_file_path):
+        print(f"Log file not found: {log_file_path}")
+        raise HTTPException(status_code=404, detail="Log file not found")
+    return FileResponse(log_file_path)
+
+
 @app.get("/artifacts/{file_path:path}")
 async def serve_file(file_path: str):
     file_location = os.path.join(kva.storage, "artifacts", file_path)

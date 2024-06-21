@@ -39,6 +39,7 @@ class File(dict):
         hash: Optional[str] = None,
         filename: Optional[str] = None,
         base_path: Optional[str] = None,
+        **kwargs,
     ):
         self.src = src
         self.path = path
@@ -47,7 +48,7 @@ class File(dict):
         self.base_path = base_path
 
         super().__init__(
-            src=self.src, path=self.path, hash=self.hash, filename=self.filename
+            src=self.src, path=self.path, hash=self.hash, filename=self.filename, **kwargs
         )
 
     def __repr__(self):
@@ -67,6 +68,23 @@ class File(dict):
                 "Can only get the dataframe after a table has been logged."
             )
         return pd.read_csv(os.path.join(self.base_path, self.path))
+
+
+class LogFile(dict):
+    def __init__(self, src: str, run_id: Optional[str] = None):
+        self.src =  os.path.abspath(os.path.expanduser(src))
+        self.run_id = run_id or "<run_id>"
+        self.filename = os.path.basename(self.src)
+        self.hash = None
+        super().__init__(src=self.src, path='?', run_id=self.path, filename=self.filename)
+    
+    @property
+    def path(self):
+        return f"artifacts/logfiles/{self.run_id}/{self.filename}"
+
+
+    def __repr__(self):
+        return f"LogFile(src={self.src!r}, path={self.path!r}, run_id={self.run_id!r}, filename={self.filename!r})"
 
 
 class Folder(dict):

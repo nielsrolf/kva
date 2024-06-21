@@ -16,7 +16,7 @@ from glob import glob
 
 import pandas as pd
 
-from kva.utils import (DEFAULT_STORAGE, CustomJSONEncoder, File, Folder, Table,
+from kva.utils import (DEFAULT_STORAGE, CustomJSONEncoder, File, LogFile, Folder, Table,
                        _deep_merge, get_latest_nonnull, logger, set_default_storage)
 
 git_semaphore = threading.Semaphore()
@@ -37,7 +37,9 @@ class DB:
         self.context_stack = []
         self.default_context = {
             'step': self._default_step,
-            'timestamp': self._default_timestamp
+            'timestamp': self._default_timestamp,
+            'cwd': os.getcwd,
+            'cmd': lambda: ' '.join(os.sys.argv),
         }
         
         # self.data = self._load_data() if data is None else data
@@ -76,6 +78,8 @@ class DB:
         def process_file(value):
             if isinstance(value, File):
                 return self._handle_file(value)
+            elif isinstance(value, LogFile):
+                return self._handle_logfile(value)
             elif isinstance(value, pd.DataFrame):
                 return self._handle_dataframe(value)
             elif isinstance(value, dict):
@@ -86,7 +90,6 @@ class DB:
                 return value
 
         processed_data = {k: process_file(v) for k, v in resolved.items()}
-        
 
         with open(self.db_file, 'a') as f:
             serialized = json.dumps(processed_data, cls=CustomJSONEncoder)
@@ -96,6 +99,16 @@ class DB:
             if view.storage == self.storage:
                 if view.accept_row(deserialized):
                     view._logged_data.append(deserialized)
+
+    def _handle_logfile(self, logfile: LogFile) -> Dict[str, Any]:
+        """Handle LogFile without storing immediately."""
+        logfile.run_id = self.context_data['run_id']
+        return {
+            'src': logfile.src,
+            'path': logfile.path,
+            'run_id': logfile.run_id,
+            'filename': logfile.filename
+        }
 
     def _handle_file(self, file: File) -> Dict[str, Any]:
         """Handle file storage and return a dictionary for logging."""
@@ -189,7 +202,7 @@ class DB:
 
     def _load_data(self) -> List[Dict[str, Any]]:
         data = []
-        for datapath in glob(os.path.join(self.storage, '*.jsonl')):
+        for datapath in sorted(glob(os.path.join(self.storage, '*.jsonl'))):
             with open(datapath, 'r') as f:
                 data += [json.loads(line) for line in f if line.strip()]
         return data
@@ -208,6 +221,10 @@ class DB:
 
     def finish(self) -> None:
         """Finish the current run."""
+        for item in self._logged_data:
+            for key, value in item.items():
+                if isinstance(value, dict) and 'src' in value and 'path' in value and 'filename' in value and value['path'].startswith('artifacts/logfile'):
+                    self.log(**{key: File(value['src'])})
         self.context_data.clear()
         self.sync()
 
@@ -254,9 +271,9 @@ class DB:
                 subprocess.run(['git', 'pull', '--rebase'], cwd=self.storage)
                 result = subprocess.run(['git', 'push'], cwd=self.storage, capture_output=True, text=True)
                 if result.returncode != 0:
-                    logger.info(f"Failed to push changes: {result.stderr}")
+                    logger.error(f"Git syncing skipped")
             except subprocess.CalledProcessError as e:
-                logger.error(f"Git operation failed: {e}")
+                logger.error(f"Git syncing skipped")
 
     def _auto_sync(self):
         if self == kva:

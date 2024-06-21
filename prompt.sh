@@ -2,28 +2,39 @@ echo "I am working on the following project:
 
 $(cat README.md)
 
-Currently, all data is appended to a single jsonl file in the data directory. This works fine on a single instance, but leads to merge conflicts when git is synced:
-
 # --- kva/__init__.py
-```python
+\`\`\`
 $(cat kva/__init__.py)
-```
+\`\`\`
+
 
 # --- kva/utils.py
-```python
+\`\`\`python
 $(cat kva/utils.py)
-```
+\`\`\`
 
 # --- Tests
-```python
+\`\`\`python
 $(cat kva/test_core.py)
-```
+\`\`\`
 
-I would like to  make the following changes:
-- we load data lazily from all data_{timestamp}.jsonl files, making .data() a @property
-    - when no data has been passed to the constructor, it reads all data_{timestamp}.jsonl files
-    - otherwise it takes the data passed to the constructor (saved in ._data)
-    - data logged directly via .log is saved to ._unsaved_data, and also used by .data()
-- whenever we log data to a file, we use a data path that was created in the constructer
+# --- UI
 
-Can you implement these changes?"
+\`\`\`python
+$(cat kva/server.py)
+\`\`\`
+
+$(concatsrc frontend/src/ --ext js)
+
+
+I would like to create a new class 'LogFile' that behaves in the following way:
+\`\`\`
+kva.init(run_id='my-run')
+kva.log(stdout=LogFile("stdout.txt"))
+\`\`\`
+- stdout.txt is not saved to the artifacts folder until .finish is called - we only save the original src
+- when logged, the path should be set to logfiles/<runid>/<filename>
+- the frontend will request the file via its path (which is not set initially), therefore we set the path to logfiles/<runid>/<filename> and handle this in the server
+- in kva.finish, we then call self.log(stdout=File(logfile.src)) to save the file to the artifacts folder
+- In the frontend, I should see a 'stdout' that updates on refresh while the run is in progress by fetching /logfiles/<runid>/<filename>, and when it is done it should look the same but now fetch it from /artifacts/<hash>/<filename>
+Can you implement this?"
