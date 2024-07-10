@@ -22,6 +22,15 @@ from kva.utils import (DEFAULT_STORAGE, CustomJSONEncoder, File, LogFile, Folder
 git_semaphore = threading.Semaphore()
 
 
+def return_false_on_exception(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Error in accept_row function: {e}, {func.__name__}(args={args}, kwargs={kwargs})")
+            return False
+    return wrapper
+
 class DB:
     _views = []
 
@@ -152,6 +161,7 @@ class DB:
 
     def filter(self, accept_row) -> 'DB':
         """Filter rows based on a function."""
+        accept_row = return_false_on_exception(accept_row)
         db = DB(storage=self.storage, data=[row for row in self.data if accept_row(row)])
         db.context_data = self.context_data.copy()
         db.accept_row = accept_row
