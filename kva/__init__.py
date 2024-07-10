@@ -173,7 +173,7 @@ class DB:
             return all(row.get(k) == v for k, v in conditions.items())
         return self.filter(condition)
 
-    def latest(self, columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True) -> Union[Dict[str, Any], pd.DataFrame]:
+    def latest(self, columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True, keep_rows_without_values=False) -> Union[Dict[str, Any], pd.DataFrame]:
         """Get the latest values for the specified columns."""
         if columns == '*':
             columns = pd.DataFrame(self.data).columns
@@ -191,6 +191,8 @@ class DB:
                 return pd.DataFrame()
 
             df = get_latest_nonnull(df, index, columns)
+            if not keep_rows_without_values:
+                df = df.dropna(subset=columns)
             return df
 
         latest_data = {}
@@ -204,6 +206,7 @@ class DB:
                     latest_data[column] = row.get(column, latest_data.get(column))
 
         latest_data = self._replace_files(latest_data)
+
         
         if single_column:
             return latest_data.get(single_column)
