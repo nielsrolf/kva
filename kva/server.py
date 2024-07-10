@@ -49,7 +49,7 @@ def load_config(config_path: str) -> ViewConfig:
 
 
 def get_run_data(keys: Dict[str, Any], columns: List[str], index: str = None):
-    kva.reload()
+    # kva.reload()
     db = kva.get(**keys)
     return db.latest(columns, index=index)
 
@@ -103,12 +103,14 @@ async def view_run(path: str):
     print(json.dumps(run_data, indent=2))
     return JSONResponse(content=run_data)
 
+@app.get("/reload")
+async def reload_data():
+    global kva_instance
+    kva_instance.reload()
 
 @app.get("/runs")
 async def list_runs():
-    global config_path
     config = load_config(config_path)
-    kva.reload()
     df = pd.DataFrame(kva.data)
     if not all(col in df.columns for col in config.index):
         raise HTTPException(status_code=400, detail="Invalid index columns in config")
