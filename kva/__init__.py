@@ -39,12 +39,8 @@ class DB:
         print(f"Using storage: {self.storage}")
         self.storage = os.path.expanduser(self.storage)
         os.makedirs(self.storage, exist_ok=True)
-        self.storage = os.path.expanduser(self.storage)
-        self.db_file = os.path.join(self.storage, f'data_{datetime.now().isoformat()}.jsonl')
-        os.makedirs(os.path.dirname(self.db_file), exist_ok=True)
-        self.context_data = {}
-        self.context_stack = []
-        self.default_context = {
+        self._db_file =  f'data_{datetime.now().isoformat()}.jsonl'
+        self.context_data = {
             'step': self._default_step,
             'timestamp': self._default_timestamp,
             'cwd': os.getcwd,
@@ -62,6 +58,10 @@ class DB:
         atexit.register(self._auto_sync)
     
     @property
+    def db_file(self):
+        return os.path.join(self.storage, self._db_file)
+    
+    @property
     def data(self):
         if self._data is None:
             self._data = self._load_data()
@@ -69,7 +69,6 @@ class DB:
 
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
-        self.context_data.update(self.default_context)
         self.context_data.update(data)
         if not 'run_id' in self.context_data:
             self.context_data['run_id'] = uuid.uuid4().hex[:8]
@@ -108,6 +107,7 @@ class DB:
             if view.storage == self.storage:
                 if view.accept_row(deserialized):
                     view._logged_data.append(deserialized)
+        return deserialized
 
     def _handle_logfile(self, logfile: LogFile) -> Dict[str, Any]:
         """Handle LogFile without storing immediately."""
@@ -188,6 +188,7 @@ class DB:
             if (isinstance(index, str) and index not in df.columns) or (isinstance(index, list) and not all(i in df.columns for i in index)):
                 # We return an empty dataframe if the index column is not present
                 print(f"Index column '{index}' not found in the data.")
+                print(f"Available columns: {df.columns}")
                 return pd.DataFrame()
 
             df = get_latest_nonnull(df, index, columns)
@@ -246,7 +247,6 @@ class DB:
         """Temporarily add data to the context."""
         # Save current context
         old_context = self.context_data.copy()
-        self.context_stack.append(old_context)
 
         # Update context
         self.context_data.update(data)
@@ -255,7 +255,7 @@ class DB:
             yield
         finally:
             # Restore previous context
-            self.context_data = self.context_stack.pop()
+            self.context_data = old_context
 
     def _default_step(self) -> int:
         """Get the current step value."""
