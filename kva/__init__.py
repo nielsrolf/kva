@@ -13,74 +13,186 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from glob import glob
+from tqdm import tqdm
+from functools import lru_cache
+from collections import defaultdict
 
 import pandas as pd
 
-from kva.utils import (DEFAULT_STORAGE, CustomJSONEncoder, File, LogFile, Folder, Table,
-                       _deep_merge, get_latest_nonnull, logger, set_default_storage)
+from kva.utils import (storage_path, set_storage, CustomJSONEncoder, File, LogFile, Folder, Table,
+                       _deep_merge, get_latest_nonnull, logger, KeyAwareDefaultDict)
 
 git_semaphore = threading.Semaphore()
 
 
-def return_false_on_exception(func):
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            logger.error(f"Error in accept_row function: {e}, {func.__name__}(args={args}, kwargs={kwargs})")
-            return False
-    return wrapper
+default_context = {
+    'cwd': os.getcwd(),
+    'cmd': ' '.join(os.sys.argv)
+}
 
-class DB:
-    _views = []
 
-    def __init__(self, storage: Optional[str] = None, data=None):
-        self.storage = storage or os.getenv('KVA_STORAGE', DEFAULT_STORAGE)
-        print(f"Using storage: {self.storage}")
-        self.storage = os.path.expanduser(self.storage)
-        os.makedirs(self.storage, exist_ok=True)
-        self._db_file =  f'data_{datetime.now().isoformat()}.jsonl'
-        self.context_data = {
-            'step': self._default_step,
-            'timestamp': self._default_timestamp,
-            'cwd': os.getcwd,
-            'cmd': lambda: ' '.join(os.sys.argv),
-        }
-        
-        # self.data = self._load_data() if data is None else data
-        self._data = data
-        self._logged_data = []
+# Cache context data
+@lru_cache
+def cached_load_json(path):
+    with open(path, 'r') as f:
+        return json.load(f)
+
+
+def load_jsonl(path):
+    if not os.path.exists(path):
+        return [], True
+    with open(path, 'r') as f:
+        return [json.loads(line) for line in f if line.strip()], False
+
+
+class Source:
+    """Class that syncs data & context to disk."""
+    def __init__(self, context):
+        self.context = context
+        self.saved, self.context_is_dirty = load_jsonl(self.data_path)
+        self.buffer = []
+        atexit.register(self.write)
+        data_sources[self.context_hash] = self
     
-        self.accept_row = lambda row: True
-        DB._views.append(self)
-        
-        self._setup_git()
-        atexit.register(self._auto_sync)
+    @staticmethod
+    def from_context(context):
+        context_hash = hashlib.sha256(json.dumps(context, sort_keys=True).encode()).hexdigest()
+        return Source.from_hash(context_hash, context=context)
+    
+    @staticmethod
+    def from_hash(context_hash, context=None):
+        if context_hash in data_sources:
+            return data_sources[context_hash]
+        context = context or cached_load_json(os.path.join(storage_path(), f'{context_hash}.context.json'))
+        return Source(context)
     
     @property
-    def db_file(self):
-        return os.path.join(self.storage, self._db_file)
+    def data_path(self):
+        return os.path.join(storage_path(), f'{self.context_hash}.data.jsonl')
+    
+    def append(self, data):
+        self.buffer.append(data)
+
+    def write(self):
+        if not self.buffer:
+            return
+        if self.context_is_dirty:
+            with open(os.path.join(storage_path(), f'{self.context_hash}.context.json'), 'w') as f:
+                json.dump(self.context, f, indent=4)
+        with open(self.data_path, 'a') as f:
+            for row in self.buffer:
+                serialized = json.dumps(row)
+                f.write(serialized + '\n')
+        self.saved += self.buffer
+        self.buffer = []
+    
+    @property
+    def context_hash(self):
+        return hashlib.sha256(json.dumps(self.context, sort_keys=True).encode()).hexdigest()
     
     @property
     def data(self):
-        if self._data is None:
-            self._data = self._load_data()
-        return self._data + self._logged_data
+        return self.saved + self.buffer
+    
+    def __iter__(self):
+        return iter(self.data)
+    
+    def __getitem__(self, key):
+        return self.data[key]
+
+data_sources = KeyAwareDefaultDict(Source.from_hash)
+
+
+class DB:
+    """Logically an append only database that tracks data merged with context, and provides a few
+    of all data that shares the same context."""
+    _views = []
+
+    def __init__(self, data_sources=None, context=default_context, conditions={}):
+        self.dynamic_context = {
+            k: v for k, v in context.items() if callable(v)
+        }
+        self.dynamic_context['step'] = self._default_step
+        self.dynamic_context['timestamp'] = self._default_timestamp
+        context = {
+            k: v for k, v in context.items() if not callable(v)
+        }
+        context[".run_started_at"] = context.get(".run_started_at", datetime.now().isoformat())
+        self.logged_data = Source.from_context(context)
+        
+        # data_sources: (context_hash, row_level_conditions)
+        self._data_sources = data_sources
+        self.conditions = conditions
+
+        # For all other views, append (self, row_level_conditions) to their data_sources if needed
+        for view in self._views:
+            accept_context, row_level_conditions = view.apply_conditions_to_context(self.context_hash)
+            if accept_context:
+                view._data_sources.append((self.context_hash, row_level_conditions))
+        DB._views.append(self)
+
+        if len(DB._views) == 1:
+            self._setup_git()
+            atexit.register(self._auto_sync)
+    
+    @property
+    def data_sources(self):
+        """Lazy load data sources: data_sources is a list of (context_hash, row_level_conditions) that is used by .data"""
+        if self._data_sources is not None:
+            return self._data_sources
+        self._data_sources = []
+        for context_file in glob(os.path.join(storage_path(), '*.context.json')):
+            context_hash = os.path.basename(context_file).replace('.context.json', '')
+            accept_context, row_level_conditions = self.apply_conditions_to_context(context_hash)
+            if accept_context:
+                self._data_sources.append((context_hash, row_level_conditions))
+        return self._data_sources
+    
+    def apply_conditions_to_context(self, context_hash, conditions={}):
+        """Loads the context for a given context_hash, then checks which conditions apply on context level
+        and which apply on row level. Returns a tuple of (accept_context, row_level_conditions)."""
+        conditions = dict(self.conditions, **conditions)
+        context = data_sources[context_hash].context
+        accept_context = all([v(context[k]) for k, v in conditions.items() if k in context])
+        if not accept_context:
+            return False, {}
+        row_level_conditions = {k: v for k, v in self.conditions.items() if k not in context}
+        return True, row_level_conditions
+    
+    @property
+    def context_hash(self):
+        return self.logged_data.context_hash
+    
+    # @lru_cache
+    def resolve(self, context_hash, row_level_conditions):
+        rows = []
+        src = data_sources[context_hash]
+        for row in src.data:
+            if all([row_level_conditions[k](v) for k, v in row_level_conditions.items()]):
+                rows.append(dict(src.context, **row))
+        return rows
+
+    @property
+    def data(self):
+        rows = []
+        for context_hash, row_level_conditions in self.data_sources:
+            rows += self.resolve(context_hash, row_level_conditions)
+        rows += self.logged_data.data
+        return rows
+
 
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
-        self.context_data.update(data)
-        if not 'run_id' in self.context_data:
-            self.context_data['run_id'] = uuid.uuid4().hex[:8]
-        return self.get(**data)
-    
-    def reload(self):
-        self._data = self._load_data()
+        db = self.get(**data)
+        # Overwrite all self attributes with the new db attributes
+        for key, value in db.__dict__.items():
+            setattr(self, key, value)
+        return self
 
     def log(self, data: Dict[str, Any]={}, **more_data) -> None:
         """Log data to the store."""
         data = {**data, **more_data}
-        resolved = {k: (v() if callable(v) else v) for k, v in self.context_data.items()}
+        resolved = {k: v() for k, v in self.dynamic_context.items()}
         resolved.update(data)
 
         def process_file(value):
@@ -99,19 +211,16 @@ class DB:
 
         processed_data = {k: process_file(v) for k, v in resolved.items()}
 
-        with open(self.db_file, 'a') as f:
-            serialized = json.dumps(processed_data, cls=CustomJSONEncoder)
-            deserialized = json.loads(serialized)
-            f.write(serialized + '\n')
-        for view in DB._views:
-            if view.storage == self.storage:
-                if view.accept_row(deserialized):
-                    view._logged_data.append(deserialized)
-        return deserialized
+        # Apply the CustomJSONEncoder to the processed data but don't convert to string yet
+        processed = json.dumps(processed_data, cls=CustomJSONEncoder)
+        processed_data = json.loads(processed)
+
+        self.logged_data.append(processed_data)
+        return processed_data
 
     def _handle_logfile(self, logfile: LogFile) -> Dict[str, Any]:
         """Handle LogFile without storing immediately."""
-        logfile.run_id = self.context_data['run_id']
+        logfile.run_id = self.logged_data.context['run_id']
         return {
             'src': logfile.src,
             'path': logfile.path,
@@ -121,7 +230,7 @@ class DB:
 
     def _handle_file(self, file: File) -> Dict[str, Any]:
         """Handle file storage and return a dictionary for logging."""
-        artifacts_dir = os.path.join(self.storage, 'artifacts')
+        artifacts_dir = os.path.join(storage_path(), 'artifacts')
         os.makedirs(artifacts_dir, exist_ok=True)
 
         dest_dir = os.path.join(artifacts_dir, file.hash)
@@ -130,8 +239,8 @@ class DB:
         dest_path = os.path.join(dest_dir, os.path.basename(file.src))
         if not os.path.exists(dest_path):
             shutil.copy(file.src, dest_path)
-        file.path = os.path.relpath(dest_path, self.storage)
-        file.base_path = self.storage
+        file.path = os.path.relpath(dest_path, storage_path())
+        file.base_path = storage_path()
 
         return {
             'src': file.src,
@@ -142,7 +251,7 @@ class DB:
 
     def _handle_dataframe(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Handle DataFrame storage as CSV and return a dictionary for logging."""
-        artifacts_dir = os.path.join(self.storage, 'artifacts')
+        artifacts_dir = os.path.join(storage_path(), 'artifacts')
         os.makedirs(artifacts_dir, exist_ok=True)
 
         file_hash = hashlib.sha256(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
@@ -154,24 +263,31 @@ class DB:
         df.to_csv(dest_path, index=False)
 
         return {
-            'path': os.path.relpath(dest_path, self.storage),
+            'path': os.path.relpath(dest_path, storage_path()),
             'hash': file_hash,
             'filename': filename
         }
 
-    def filter(self, accept_row) -> 'DB':
-        """Filter rows based on a function."""
-        accept_row = return_false_on_exception(accept_row)
-        db = DB(storage=self.storage, data=[row for row in self.data if accept_row(row)])
-        db.context_data = self.context_data.copy()
-        db.accept_row = accept_row
-        return db
+    def filter(self, conditions, new_context={}) -> 'DB':
+        """Filter rows based on a dict of functions."""
+        # Iterate over context files
+        # Apply all conditions for keys in the context files
+        # If they all pass, load the data and apply remaining conditions to rows
+
+        filtered_data_sources = []
+        for context_hash, row_level_conditions in self.data_sources:
+            accept_context, new_row_level_conditions = self.apply_conditions_to_context(context_hash, conditions)
+            if accept_context:
+                filtered_data_sources.append((context_hash, new_row_level_conditions))
+        combined_conditions = dict(self.conditions, **conditions)
+        new_context = {**self.logged_data.context, **new_context}
+        return DB(filtered_data_sources, new_context, combined_conditions)
+
     
-    def get(self, **conditions: Dict[str, Any]) -> 'DB':
+    def get(self, **context: Dict[str, Any]) -> 'DB':
         """Get a subset of the data based on conditions."""
-        def condition(row):
-            return all(row.get(k) == v for k, v in conditions.items())
-        return self.filter(condition)
+        condition = {k: lambda v: v == context[k] for k in context}
+        return self.filter(condition, context)
 
     def latest(self, columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True, keep_rows_without_values=False) -> Union[Dict[str, Any], pd.DataFrame]:
         """Get the latest values for the specified columns."""
@@ -216,7 +332,7 @@ class DB:
 
     def _load_data(self) -> List[Dict[str, Any]]:
         data = []
-        for datapath in sorted(glob(os.path.join(self.storage, '*.jsonl'))):
+        for datapath in sorted(glob(os.path.join(storage_path(), '*.jsonl'))):
             with open(datapath, 'r') as f:
                 data += [json.loads(line) for line in f if line.strip()]
         return data
@@ -225,7 +341,7 @@ class DB:
         """Replace file dictionaries with File objects."""
         if isinstance(data, dict):
             if 'path' in data and 'hash' in data and 'filename' in data:
-                return File(**data, base_path=self.storage)
+                return File(**data, base_path=storage_path())
             else:
                 return {k: self._replace_files(v) for k, v in data.items()}
         elif isinstance(data, list):
@@ -239,23 +355,17 @@ class DB:
             for key, value in item.items():
                 if isinstance(value, dict) and 'src' in value and 'path' in value and 'filename' in value and value['path'].startswith('artifacts/logfile'):
                     self.log(**{key: File(value['src'])})
-        self.context_data.clear()
+        self.logged_data.context.clear()
         self.sync()
 
     @contextmanager
     def context(self, **data: Dict[str, Any]):
-        """Temporarily add data to the context."""
-        # Save current context
-        old_context = self.context_data.copy()
-
-        # Update context
-        self.context_data.update(data)
-
-        try:
-            yield
-        finally:
-            # Restore previous context
-            self.context_data = old_context
+        """Context manager to temporarily set context data."""
+        child = self.get(**data)
+        original = self.__dict__.copy()
+        self.__dict__.update(child.__dict__)
+        yield
+        self.__dict__.update(original)
 
     def _default_step(self) -> int:
         """Get the current step value."""
@@ -267,22 +377,22 @@ class DB:
     
     def _setup_git(self):
         """Initialize the git repository if it doesn't exist."""
-        if not os.path.exists(os.path.join(self.storage, '.git')):
-            logger.warning(f"No git repository found at {self.storage}. Initializing a new repository.")
-            subprocess.run(['git', 'init'], cwd=self.storage)
-            subprocess.run(['git', 'lfs', 'install'], cwd=self.storage)
-            subprocess.run(['git', 'lfs', 'track', 'artifacts/*'], cwd=self.storage)
-            subprocess.run(['git', 'add', '.gitattributes'], cwd=self.storage)
-            subprocess.run(['git', 'commit', '-m', 'Initialize git repository with git-lfs'], cwd=self.storage)
+        if not os.path.exists(os.path.join(storage_path(), '.git')):
+            logger.warning(f"No git repository found at {storage_path()}. Initializing a new repository.")
+            subprocess.run(['git', 'init'], cwd=storage_path())
+            subprocess.run(['git', 'lfs', 'install'], cwd=storage_path())
+            subprocess.run(['git', 'lfs', 'track', 'artifacts/*'], cwd=storage_path())
+            subprocess.run(['git', 'add', '.gitattributes'], cwd=storage_path())
+            subprocess.run(['git', 'commit', '-m', 'Initialize git repository with git-lfs'], cwd=storage_path())
         
     def sync(self):
         """Commit and push changes to the git repository."""
         with git_semaphore:
             try:
-                subprocess.run(['git', 'add', '.'], cwd=self.storage)
-                subprocess.run(['git', 'commit', '-m', 'Sync data'], cwd=self.storage)
-                subprocess.run(['git', 'pull', '--rebase'], cwd=self.storage)
-                result = subprocess.run(['git', 'push'], cwd=self.storage, capture_output=True, text=True)
+                subprocess.run(['git', 'add', '.'], cwd=storage_path())
+                subprocess.run(['git', 'commit', '-m', 'Sync data'], cwd=storage_path())
+                subprocess.run(['git', 'pull', '--rebase'], cwd=storage_path())
+                result = subprocess.run(['git', 'push'], cwd=storage_path(), capture_output=True, text=True)
                 if result.returncode != 0:
                     logger.error(f"Git syncing skipped")
             except subprocess.CalledProcessError as e:
@@ -307,6 +417,7 @@ class DB:
     @property
     def summary(self):
         return self.latest('*')
+
 # Create a default DB instance for convenience
 kva = DB()
 

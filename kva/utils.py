@@ -10,18 +10,22 @@ from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
-DEFAULT_STORAGE = "/workspace/kva_store" if os.path.exists("/workspace") else "~/.kva"
+_STORAGE = "/workspace/kva_store" if os.path.exists("/workspace") else "~/.kva"
 if os.environ.get("KVA_STORAGE"):
-    DEFAULT_STORAGE = os.environ["KVA_STORAGE"]
+    _STORAGE = os.environ["KVA_STORAGE"]
 
 logger = getLogger(__name__)
 
 
-def set_default_storage(kva, path: str):
-    global DEFAULT_STORAGE
-    DEFAULT_STORAGE = path
-    kva.storage = path
+def set_storage(path: str):
+    global _STORAGE
+    path = os.path.abspath(os.path.expanduser(path))
+    _STORAGE = path
     os.makedirs(path, exist_ok=True)
+
+
+def storage_path():
+    return _STORAGE
     
 
 class Table(pd.DataFrame):
@@ -183,7 +187,7 @@ class CustomJSONEncoder(json.JSONEncoder):
         file_path = self._pickle_object(obj)
         file = File(
             src=file_path,
-            path=os.path.relpath(file_path, DEFAULT_STORAGE),
+            path=os.path.relpath(file_path, _STORAGE),
             filename=os.path.basename(file_path),
         )
         return file
@@ -191,10 +195,36 @@ class CustomJSONEncoder(json.JSONEncoder):
     def _pickle_object(self, obj):
         # Generate a unique filename based on the object's class name and a UUID
         filename = f"{obj.__class__.__name__}_{uuid.uuid4().hex}.pkl"
-        file_path = os.path.join(DEFAULT_STORAGE, "artifacts", filename)
+        file_path = os.path.join(_STORAGE, "artifacts", filename)
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
         with open(file_path, "wb") as f:
             pickle.dump(obj, f)
 
         return file_path
+
+
+
+def return_false_on_exception(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Error in accept_row function: {e}, {func.__name__}(args={args}, kwargs={kwargs})")
+            return False
+    return wrapper
+
+
+from collections import UserDict
+
+class KeyAwareDefaultDict(UserDict):
+    def __init__(self, default_factory=None):
+        super().__init__()
+        self.default_factory = default_factory
+    
+    def __missing__(self, key):
+        if self.default_factory is None:
+            raise KeyError(key)
+        value = self.default_factory(key)
+        self[key] = value
+        return value
