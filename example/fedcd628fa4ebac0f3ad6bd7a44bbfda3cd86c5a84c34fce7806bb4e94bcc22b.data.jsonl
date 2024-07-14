@@ -1,0 +1,5 @@
+{"step": null, "timestamp": "2024-07-14T01:59:13.358948", "config": {"foo": "bar"}}
+{"step": null, "timestamp": "2024-07-14T01:59:13.359098", "config": {"hello": "world"}}
+{"step": 1, "timestamp": "2024-07-14T01:59:13.359146", "loss": 42}
+{"step": 2, "timestamp": "2024-07-14T01:59:13.359174"}
+{"step": 2, "timestamp": "2024-07-14T01:59:13.359197", "loss": 4.2}
