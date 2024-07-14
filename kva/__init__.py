@@ -108,12 +108,8 @@ class DB:
     of all data that shares the same context."""
     _views = []
 
-    def __init__(self, data_sources=None, context=default_context, conditions={}):
-        self.dynamic_context = {
-            k: v for k, v in context.items() if callable(v)
-        }
-        self.dynamic_context['step'] = self._default_step
-        self.dynamic_context['timestamp'] = self._default_timestamp
+    def __init__(self, data_sources=None, context=default_context, conditions={}, dynamic_context={'timestamp': lambda: datetime.now().isoformat()}):
+        self.dynamic_context = dynamic_context
         context = {
             k: v for k, v in context.items() if not callable(v)
         }
@@ -184,6 +180,7 @@ class DB:
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
         db = self.get(**data)
+        db.dynamic_context['step'] = lambda: db._default_step()
         # Overwrite all self attributes with the new db attributes
         for key, value in db.__dict__.items():
             setattr(self, key, value)
@@ -199,6 +196,7 @@ class DB:
             if isinstance(value, File):
                 return self._handle_file(value)
             elif isinstance(value, LogFile):
+                value.report_context = resolved
                 return self._handle_logfile(value)
             elif isinstance(value, pd.DataFrame):
                 return self._handle_dataframe(value)
@@ -221,6 +219,7 @@ class DB:
     def _handle_logfile(self, logfile: LogFile) -> Dict[str, Any]:
         """Handle LogFile without storing immediately."""
         logfile.run_id = self.logged_data.context['run_id']
+        logfile.report_to = self
         return {
             'src': logfile.src,
             'path': logfile.path,
@@ -307,9 +306,10 @@ class DB:
                 print(f"Available columns: {df.columns}")
                 return pd.DataFrame()
 
+            breakpoint()
             df = get_latest_nonnull(df, index, columns)
             if not keep_rows_without_values:
-                df = df.dropna(subset=columns)
+                df = df.dropna(subset=[c for c in columns if c in df.columns], how='all')
             return df
 
         latest_data = {}
@@ -348,15 +348,6 @@ class DB:
             return [self._replace_files(item) for item in data]
         else:
             return data
-
-    def finish(self) -> None:
-        """Finish the current run."""
-        for item in self._logged_data:
-            for key, value in item.items():
-                if isinstance(value, dict) and 'src' in value and 'path' in value and 'filename' in value and value['path'].startswith('artifacts/logfile'):
-                    self.log(**{key: File(value['src'])})
-        self.logged_data.context.clear()
-        self.sync()
 
     @contextmanager
     def context(self, **data: Dict[str, Any]):

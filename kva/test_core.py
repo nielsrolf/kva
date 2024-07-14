@@ -221,13 +221,6 @@ def test_logfile(setup_env):
     logfile = kva.get(run_id="test-logfile-run").latest("logfile")
     assert logfile["src"] == log_src
     assert logfile["path"] == "artifacts/logfiles/test-logfile-run/test_core.py"
-    
-    kva.finish()
-
-    logfile = kva.get(run_id="test-logfile-run").latest("logfile")
-    assert logfile["src"] == log_src
-    assert logfile["path"] != "artifacts/logfiles/test-logfile-run/test_core.py"
-    assert os.path.exists(os.path.join(kva.storage, logfile["path"]))
 
 
 if __name__ == "__main__":

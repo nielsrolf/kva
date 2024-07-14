@@ -1,3 +1,4 @@
+import atexit
 import hashlib
 import json
 import os
@@ -13,6 +14,9 @@ import pandas as pd
 _STORAGE = "/workspace/kva_store" if os.path.exists("/workspace") else "~/.kva"
 if os.environ.get("KVA_STORAGE"):
     _STORAGE = os.environ["KVA_STORAGE"]
+_STORAGE = os.path.abspath(os.path.expanduser(_STORAGE))
+
+os.makedirs(_STORAGE, exist_ok=True)
 
 logger = getLogger(__name__)
 
@@ -45,11 +49,12 @@ class File(dict):
         base_path: Optional[str] = None,
         **kwargs,
     ):
-        self.src = src
-        self.path = path
-        self.hash = hash or self._calculate_hash(src)
-        self.filename = filename or os.path.basename(src)
-        self.base_path = base_path
+        self.src = src # User provided path
+        # Remaining info is set by the DB instance via which the file is logged
+        self.path = path # Path relative to the storage
+        self.hash = hash or self._calculate_hash(src) # Hash of the file
+        self.filename = filename or os.path.basename(src) # Filename
+        self.base_path = base_path # Base path of the storage
 
         super().__init__(
             src=self.src, path=self.path, hash=self.hash, filename=self.filename, **kwargs
@@ -74,18 +79,32 @@ class File(dict):
         return pd.read_csv(os.path.join(self.base_path, self.path))
 
 
+def recursive_replace(d: Union[Dict, List], old: Any, new: Any) -> Dict:
+    if isinstance(d, dict):
+        return {k: recursive_replace(v, old, new) for k, v in d.items()}
+    if isinstance(d, list):
+        return [recursive_replace(v, old, new) for v in d]
+    return new if d == old else d
+
+
 class LogFile(dict):
     def __init__(self, src: str, run_id: Optional[str] = None):
         self.src =  os.path.abspath(os.path.expanduser(src))
         self.run_id = run_id or "<run_id>"
         self.filename = os.path.basename(self.src)
         self.hash = None
+        self.report_to = None
+        self.report_context = None
+        atexit.register(self.log_final)
         super().__init__(src=self.src, path='?', run_id=self.path, filename=self.filename)
+    
+    def log_final(self):
+        if self.report_to:
+            self.report_to.log(recursive_replace(self.report_context, self, File(src=self.src)))
     
     @property
     def path(self):
         return f"artifacts/logfiles/{self.run_id}/{self.filename}"
-
 
     def __repr__(self):
         return f"LogFile(src={self.src!r}, path={self.path!r}, run_id={self.run_id!r}, filename={self.filename!r})"
