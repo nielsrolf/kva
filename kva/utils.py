@@ -79,14 +79,6 @@ class File(dict):
         return pd.read_csv(os.path.join(self.base_path, self.path))
 
 
-def recursive_replace(d: Union[Dict, List], old: Any, new: Any) -> Dict:
-    if isinstance(d, dict):
-        return {k: recursive_replace(v, old, new) for k, v in d.items()}
-    if isinstance(d, list):
-        return [recursive_replace(v, old, new) for v in d]
-    return new if d == old else d
-
-
 class LogFile(dict):
     def __init__(self, src: str, run_id: Optional[str] = None):
         self.src =  os.path.abspath(os.path.expanduser(src))
@@ -100,7 +92,9 @@ class LogFile(dict):
     
     def log_final(self):
         if self.report_to:
-            self.report_to.log(recursive_replace(self.report_context, self, File(src=self.src)))
+            data = {k: v if v != self else File(self.src) for k, v in self.report_context.items()}
+            self.report_to.log(data)
+            self.report_to.logged_data.write()
     
     @property
     def path(self):

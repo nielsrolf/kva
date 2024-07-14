@@ -103,6 +103,10 @@ class Source:
 data_sources = KeyAwareDefaultDict(Source.from_hash)
 
 
+@lru_cache
+def get_time_of_hash(context_hash):
+    return data_sources[context_hash].context.get('.run_started_at', datetime.now().isoformat())
+
 class DB:
     """Logically an append only database that tracks data merged with context, and provides a few
     of all data that shares the same context."""
@@ -172,6 +176,7 @@ class DB:
     @property
     def data(self):
         rows = []
+        data_sources = sorted(self.data_sources, key=lambda source: get_time_of_hash(source[0]))
         for context_hash, row_level_conditions in self.data_sources:
             rows += self.resolve(context_hash, row_level_conditions)
         rows += self.logged_data.data
@@ -329,13 +334,6 @@ class DB:
             return latest_data.get(single_column)
         else:
             return latest_data
-
-    def _load_data(self) -> List[Dict[str, Any]]:
-        data = []
-        for datapath in sorted(glob(os.path.join(storage_path(), '*.jsonl'))):
-            with open(datapath, 'r') as f:
-                data += [json.loads(line) for line in f if line.strip()]
-        return data
 
     def _replace_files(self, data: Union[Dict[str, Any], List[Any]]) -> Union[Dict[str, Any], List[Any]]:
         """Replace file dictionaries with File objects."""
