@@ -120,11 +120,12 @@ class DB:
         self._data_sources = data_sources
         self.conditions = conditions
 
-        # For all other views, append (self, row_level_conditions) to their data_sources if needed
         for view in self._views:
+            # For all other views, append (self, row_level_conditions) to their data_sources if needed
             accept_context, row_level_conditions = view.apply_conditions_to_context(self.context_hash)
             if accept_context:
                 view._data_sources.append((self.context_hash, row_level_conditions))
+
         DB._views.append(self)
 
         if len(DB._views) == 1:
@@ -274,7 +275,7 @@ class DB:
         # If they all pass, load the data and apply remaining conditions to rows
 
         filtered_data_sources = []
-        for context_hash, row_level_conditions in self.data_sources:
+        for context_hash, row_level_conditions in self.data_sources + [(self.context_hash, {})]:
             accept_context, new_row_level_conditions = self.apply_conditions_to_context(context_hash, conditions)
             if accept_context:
                 filtered_data_sources.append((context_hash, new_row_level_conditions))
@@ -306,7 +307,6 @@ class DB:
                 print(f"Available columns: {df.columns}")
                 return pd.DataFrame()
 
-            breakpoint()
             df = get_latest_nonnull(df, index, columns)
             if not keep_rows_without_values:
                 df = df.dropna(subset=[c for c in columns if c in df.columns], how='all')

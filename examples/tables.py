@@ -29,6 +29,7 @@ if __name__ == "__main__":
 
 
     print("dummy_table step=1")
+    breakpoint()
     df1 = run.get(step=1).latest('dummy_table').as_df()
     print(df1)
 
