@@ -13,6 +13,9 @@ import pandas as pd
 _STORAGE = "/workspace/kva_store" if os.path.exists("/workspace") else "~/.kva"
 if os.environ.get("KVA_STORAGE"):
     _STORAGE = os.environ["KVA_STORAGE"]
+_STORAGE = os.path.abspath(os.path.expanduser(_STORAGE))
+
+os.makedirs(_STORAGE, exist_ok=True)
 
 logger = getLogger(__name__)
 

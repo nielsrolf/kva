@@ -108,12 +108,8 @@ class DB:
     of all data that shares the same context."""
     _views = []
 
-    def __init__(self, data_sources=None, context=default_context, conditions={}):
-        self.dynamic_context = {
-            k: v for k, v in context.items() if callable(v)
-        }
-        self.dynamic_context['step'] = self._default_step
-        self.dynamic_context['timestamp'] = self._default_timestamp
+    def __init__(self, data_sources=None, context=default_context, conditions={}, dynamic_context={'timestamp': lambda: datetime.now().isoformat()}):
+        self.dynamic_context = dynamic_context
         context = {
             k: v for k, v in context.items() if not callable(v)
         }
@@ -184,6 +180,7 @@ class DB:
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
         db = self.get(**data)
+        db.dynamic_context['step'] = lambda: db._default_step()
         # Overwrite all self attributes with the new db attributes
         for key, value in db.__dict__.items():
             setattr(self, key, value)
