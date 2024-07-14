@@ -103,6 +103,21 @@ class Source:
 data_sources = KeyAwareDefaultDict(Source.from_hash)
 
 
+class ForwardFill:
+    def __init__(self, *columns):
+        self.columns = columns
+        self.values = {c: None for c in columns}
+    
+    def apply(self, data):
+        for c in self.columns:
+            if c in data and data[c] is not None:
+                self.values[c] = data[c]
+            else:
+                data[c] = self.values[c]
+        return data
+
+
+
 @lru_cache
 def get_time_of_hash(context_hash):
     return data_sources[context_hash].context.get('.run_started_at', datetime.now().isoformat())
@@ -112,23 +127,28 @@ class DB:
     of all data that shares the same context."""
     _views = []
 
-    def __init__(self, data_sources=None, context=default_context, conditions={}, dynamic_context={'timestamp': lambda: datetime.now().isoformat()}):
+    def __init__(self, data_sources=None, context=default_context, conditions={}, dynamic_context={'timestamp': lambda: datetime.now().isoformat()}, forward_fill=None):
         self.dynamic_context = dynamic_context
         context = {
             k: v for k, v in context.items() if not callable(v)
         }
         context[".run_started_at"] = context.get(".run_started_at", datetime.now().isoformat())
         self.logged_data = Source.from_context(context)
+        self.forward_fill = forward_fill
         
         # data_sources: (context_hash, row_level_conditions)
         self._data_sources = data_sources
+        self._indexed = set()
         self.conditions = conditions
 
         for view in self._views:
+            if self.context_hash in view._indexed:
+                continue
             # For all other views, append (self, row_level_conditions) to their data_sources if needed
             accept_context, row_level_conditions = view.apply_conditions_to_context(self.context_hash)
             if accept_context:
                 view._data_sources.append((self.context_hash, row_level_conditions))
+            view._indexed.add(self.context_hash)
 
         DB._views.append(self)
 
@@ -157,7 +177,7 @@ class DB:
         accept_context = all([v(context[k]) for k, v in conditions.items() if k in context])
         if not accept_context:
             return False, {}
-        row_level_conditions = {k: v for k, v in self.conditions.items() if k not in context}
+        row_level_conditions = {k: v for k, v in conditions.items() if k not in context}
         return True, row_level_conditions
     
     @property
@@ -169,7 +189,7 @@ class DB:
         rows = []
         src = data_sources[context_hash]
         for row in src.data:
-            if all([row_level_conditions[k](v) for k, v in row_level_conditions.items()]):
+            if all([v(row.get(k)) for k, v in row_level_conditions.items()]):
                 rows.append(dict(src.context, **row))
         return rows
 
@@ -186,10 +206,10 @@ class DB:
     def init(self, **data: Dict[str, Any]) -> None:
         """Initialize a run with given context data."""
         db = self.get(**data)
-        db.dynamic_context['step'] = lambda: db._default_step()
         # Overwrite all self attributes with the new db attributes
         for key, value in db.__dict__.items():
             setattr(self, key, value)
+        self.forward_fill = ForwardFill('step')
         return self
 
     def log(self, data: Dict[str, Any]={}, **more_data) -> None:
@@ -197,6 +217,8 @@ class DB:
         data = {**data, **more_data}
         resolved = {k: v() for k, v in self.dynamic_context.items()}
         resolved.update(data)
+        if self.forward_fill:
+            resolved = self.forward_fill.apply(resolved)
 
         def process_file(value):
             if isinstance(value, File):
@@ -286,7 +308,7 @@ class DB:
                 filtered_data_sources.append((context_hash, new_row_level_conditions))
         combined_conditions = dict(self.conditions, **conditions)
         new_context = {**self.logged_data.context, **new_context}
-        return DB(filtered_data_sources, new_context, combined_conditions)
+        return DB(filtered_data_sources, new_context, combined_conditions, forward_fill=self.forward_fill)
 
     
     def get(self, **context: Dict[str, Any]) -> 'DB':
@@ -374,18 +396,18 @@ class DB:
             subprocess.run(['git', 'add', '.gitattributes'], cwd=storage_path())
             subprocess.run(['git', 'commit', '-m', 'Initialize git repository with git-lfs'], cwd=storage_path())
         
-    def sync(self):
-        """Commit and push changes to the git repository."""
-        with git_semaphore:
-            try:
-                subprocess.run(['git', 'add', '.'], cwd=storage_path())
-                subprocess.run(['git', 'commit', '-m', 'Sync data'], cwd=storage_path())
-                subprocess.run(['git', 'pull', '--rebase'], cwd=storage_path())
-                result = subprocess.run(['git', 'push'], cwd=storage_path(), capture_output=True, text=True)
-                if result.returncode != 0:
-                    logger.error(f"Git syncing skipped")
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Git syncing skipped")
+    # def sync(self):
+    #     """Commit and push changes to the git repository."""
+    #     with git_semaphore:
+    #         try:
+    #             subprocess.run(['git', 'add', '.'], cwd=storage_path())
+    #             subprocess.run(['git', 'commit', '-m', 'Sync data'], cwd=storage_path())
+    #             subprocess.run(['git', 'pull', '--rebase'], cwd=storage_path())
+    #             result = subprocess.run(['git', 'push'], cwd=storage_path(), capture_output=True, text=True)
+    #             if result.returncode != 0:
+    #                 logger.error(f"Git syncing skipped")
+    #         except subprocess.CalledProcessError as e:
+    #             logger.error(f"Git syncing skipped")
 
     def _auto_sync(self):
         if self == kva:

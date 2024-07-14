@@ -36,6 +36,34 @@ def test_basic_logging(setup_env):
     result = kva.get(run_id="test-run").latest("config")
     assert result == {"foo": "bar", "hello": "world"}
 
+def test_context_manager(setup_env):
+    kva.init(run_id="test-run")
+    parent = kva
+    step = 0
+    for epoch in range(3):
+        with kva.context(epoch=epoch):
+            kva.log(step=epoch)
+            for agent in ["agent1", "agent2"]:
+                kva.log(loss=epoch * 10 + int(agent[-1]), agent=agent)
+
+    stepwise = kva.get(agent="agent1").latest("loss", index='step')
+    expected = pd.DataFrame({"step": [0, 1, 2], "loss": [1, 11, 21]})
+    pd.testing.assert_frame_equal(stepwise.reset_index(), expected)
+
+    agent1_history = kva.get(agent="agent1").latest("loss", index="epoch")
+    expected = pd.DataFrame({"epoch": [0, 1, 2], "loss": [1, 11, 21]})
+    pd.testing.assert_frame_equal(agent1_history.reset_index(), expected)
+    agent2_history = kva.get(run_id="test-run", agent="agent2").latest("loss", index="epoch")
+    expected = pd.DataFrame({"epoch": [0, 1, 2], "loss": [2, 12, 22]})
+
+    final_losses = kva.get(run_id="test-run").latest("loss", index="agent")
+    assert final_losses.loc["agent1", "loss"] == 21
+    assert final_losses.loc["agent2", "loss"] == 22
+
+    epoch_1_losses = kva.get(run_id="test-run", epoch=1).latest("loss", index="agent")
+    assert epoch_1_losses.loc["agent1", "loss"] == 11
+    assert epoch_1_losses.loc["agent2", "loss"] == 12
+
 
 @dataclass
 class Config:
