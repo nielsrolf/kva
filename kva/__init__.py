@@ -31,6 +31,14 @@ def return_false_on_exception(func):
             return False
     return wrapper
 
+
+def safe_load(line, error_info=''):
+    try:
+        return json.loads(line)
+    except:
+        print("Could not load: ", error_info, line)
+
+
 class DB:
     _views = []
 
@@ -218,7 +226,8 @@ class DB:
         data = []
         for datapath in sorted(glob(os.path.join(self.storage, '*.jsonl'))):
             with open(datapath, 'r') as f:
-                data += [json.loads(line) for line in f if line.strip()]
+                data += [safe_load(line, datapath) for line in f]
+        data = [i for i in data if i]
         return data
 
     def _replace_files(self, data: Union[Dict[str, Any], List[Any]]) -> Union[Dict[str, Any], List[Any]]:
