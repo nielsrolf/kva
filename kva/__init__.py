@@ -183,8 +183,11 @@ class DB:
 
     def latest(self, columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True, keep_rows_without_values=False) -> Union[Dict[str, Any], pd.DataFrame]:
         """Get the latest values for the specified columns."""
+        if index or columns == '*':
+            df = pd.DataFrame(self.data)
+
         if columns == '*':
-            columns = pd.DataFrame(self.data).columns
+            columns = df.columns
             
         single_column = None
         if isinstance(columns, str):
@@ -192,16 +195,14 @@ class DB:
             columns = [columns]
 
         if index:
-            df = pd.DataFrame(self.data)
             if (isinstance(index, str) and index not in df.columns) or (isinstance(index, list) and not all(i in df.columns for i in index)):
                 # We return an empty dataframe if the index column is not present
                 print(f"Index column '{index}' not found in the data.")
                 print(f"Available columns: {df.columns}")
                 return pd.DataFrame()
-
             df = get_latest_nonnull(df, index, columns)
             if not keep_rows_without_values:
-                df = df.dropna(subset=columns)
+                df = df.dropna(subset=[col for col in columns if col in df.columns], how='all')
             return df
 
         latest_data = {}
