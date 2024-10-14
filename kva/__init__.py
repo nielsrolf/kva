@@ -396,18 +396,18 @@ class DB:
             subprocess.run(['git', 'add', '.gitattributes'], cwd=storage_path())
             subprocess.run(['git', 'commit', '-m', 'Initialize git repository with git-lfs'], cwd=storage_path())
         
-    # def sync(self):
-    #     """Commit and push changes to the git repository."""
-    #     with git_semaphore:
-    #         try:
-    #             subprocess.run(['git', 'add', '.'], cwd=storage_path())
-    #             subprocess.run(['git', 'commit', '-m', 'Sync data'], cwd=storage_path())
-    #             subprocess.run(['git', 'pull', '--rebase'], cwd=storage_path())
-    #             result = subprocess.run(['git', 'push'], cwd=storage_path(), capture_output=True, text=True)
-    #             if result.returncode != 0:
-    #                 logger.error(f"Git syncing skipped")
-    #         except subprocess.CalledProcessError as e:
-    #             logger.error(f"Git syncing skipped")
+    def sync(self):
+        """Commit and push changes to the git repository."""
+        with git_semaphore:
+            try:
+                subprocess.run(['git', 'add', '.'], cwd=storage_path())
+                subprocess.run(['git', 'commit', '-m', 'Sync data'], cwd=storage_path())
+                subprocess.run(['git', 'pull', '--rebase'], cwd=storage_path())
+                result = subprocess.run(['git', 'push'], cwd=storage_path(), capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.error(f"Git syncing skipped")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Git syncing skipped")
 
     def _auto_sync(self):
         if self == kva:
