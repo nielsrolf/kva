@@ -1,6 +1,6 @@
 import pandas as pd
 import kva
-
+import time
 
 
 def get_dummy_df(text):
@@ -11,8 +11,9 @@ def get_dummy_df(text):
     return df
 
 
+
 if __name__ == "__main__":
-    run = kva.init(run_id="Nested tables test")
+    run = kva.init(run_id=f"Nested tables test - {time.time()}")
 
     kva.log(step=1)
     kva.log({'dummy_table': get_dummy_df('dummy text')})
@@ -28,6 +29,7 @@ if __name__ == "__main__":
 
 
     print("dummy_table step=1")
+    breakpoint()
     df1 = run.get(step=1).latest('dummy_table').as_df()
     print(df1)
 

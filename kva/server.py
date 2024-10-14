@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from kva import File, kva
+from kva import File, kva, storage_path
 
 app = FastAPI()
 
@@ -139,7 +139,7 @@ async def serve_log_file(run_id: str, filename: str):
 
 @app.get("/artifacts/{file_path:path}")
 async def serve_file(file_path: str):
-    file_location = os.path.join(kva.storage, "artifacts", file_path)
+    file_location = os.path.join(storage_path(), "artifacts", file_path)
     file_location = os.path.expanduser(file_location)
     if not os.path.exists(file_location):
         print(f"File not found: {file_location}")
@@ -183,7 +183,7 @@ def make_config():
                 {"name": col, "columns": [col], "type": "lineplot", "index": index}
             )
 
-    config_path = os.path.join(kva.storage, "default.yaml")
+    config_path = os.path.join(storage_path(), "default.yaml")
     with open(config_path, "w") as file:
         yaml.dump(config, file)
     return config_path

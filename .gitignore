@@ -9,3 +9,6 @@ kva.egg-info/
 backup/
 .DS_Store
 dev.py
+.minichain/
+.cache/
+.env

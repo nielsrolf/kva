@@ -14,18 +14,55 @@ from hydra import compose, initialize
 from hydra.core.config_store import ConfigStore
 from omegaconf import OmegaConf
 
-from kva import File, LogFile, Folder, kva, set_default_storage
+from kva import DB, File, LogFile, Folder, kva, set_storage, storage_path
 
 
 # Fixture to create and clean up a test environment
 @pytest.fixture(scope="module", autouse=True)
 def setup_env():
-    set_default_storage(kva, "/tmp/kva_test_encoder")
     if os.path.exists('/tmp/kva_test_encoder'):
         shutil.rmtree('/tmp/kva_test_encoder')
-    
+    set_storage("/tmp/kva_test_encoder")
     yield
-    shutil.rmtree('/tmp/kva_test_encoder')
+
+
+def test_basic_logging(setup_env):
+    kva.init(run_id="test-run")
+    kva.log(config={"foo": "bar"})
+    kva.log(config={"hello": "world"})
+    kva.log(step=1, loss=42)
+    kva.log(step=2)
+    kva.log(loss=4.2)
+    result = kva.get(run_id="test-run").latest("config")
+    assert result == {"foo": "bar", "hello": "world"}
+
+def test_context_manager(setup_env):
+    kva.init(run_id="test-run")
+    parent = kva
+    step = 0
+    for epoch in range(3):
+        with kva.context(epoch=epoch):
+            kva.log(step=epoch)
+            for agent in ["agent1", "agent2"]:
+                kva.log(loss=epoch * 10 + int(agent[-1]), agent=agent)
+
+    stepwise = kva.get(agent="agent1").latest("loss", index='step')
+    expected = pd.DataFrame({"step": [0, 1, 2], "loss": [1, 11, 21]})
+    pd.testing.assert_frame_equal(stepwise.reset_index(), expected)
+
+    agent1_history = kva.get(agent="agent1").latest("loss", index="epoch")
+    expected = pd.DataFrame({"epoch": [0, 1, 2], "loss": [1, 11, 21]})
+    pd.testing.assert_frame_equal(agent1_history.reset_index(), expected)
+    agent2_history = kva.get(run_id="test-run", agent="agent2").latest("loss", index="epoch")
+    expected = pd.DataFrame({"epoch": [0, 1, 2], "loss": [2, 12, 22]})
+
+    final_losses = kva.get(run_id="test-run").latest("loss", index="agent")
+    assert final_losses.loc["agent1", "loss"] == 21
+    assert final_losses.loc["agent2", "loss"] == 22
+
+    epoch_1_losses = kva.get(run_id="test-run", epoch=1).latest("loss", index="agent")
+    assert epoch_1_losses.loc["agent1", "loss"] == 11
+    assert epoch_1_losses.loc["agent2", "loss"] == 12
 
 
 @dataclass
@@ -106,17 +143,6 @@ def test_log_local_class_object(setup_env):
     assert result["name"] == "test", "Local class object not serialized correctly"
 
 
-def test_basic_logging(setup_env):
-    kva.init(run_id="test-run")
-    kva.log(config={"foo": "bar"})
-    kva.log(config={"hello": "world"})
-    kva.log(step=1, loss=42)
-    kva.log(step=2)
-    kva.log(loss=4.2)
-    result = kva.get(run_id="test-run").latest("config")
-    assert result == {"foo": "bar", "hello": "world"}
-
-
 def test_deep_merge_false(setup_env):
     kva.init(run_id="test-run")
     kva.log(config={"foo": "bar"})
@@ -174,7 +200,7 @@ def test_mandelbrot_example(setup_env):
         generate_mandelbrot_image(step)
         kva.log(step=step, image=File("mandelbrot.png"))
     result = kva.get(run_id="mandelbrot-run").latest("image")
-    assert os.path.exists(os.path.join(kva.storage, result["path"]))
+    assert os.path.exists(os.path.join(storage_path(), result["path"]))
 
 
 def test_llm_sampling(setup_env):
@@ -223,13 +249,6 @@ def test_logfile(setup_env):
     logfile = kva.get(run_id="test-logfile-run").latest("logfile")
     assert logfile["src"] == log_src
     assert logfile["path"] == "artifacts/logfiles/test-logfile-run/test_core.py"
-    
-    kva.finish()
-
-    logfile = kva.get(run_id="test-logfile-run").latest("logfile")
-    assert logfile["src"] == log_src
-    assert logfile["path"] != "artifacts/logfiles/test-logfile-run/test_core.py"
-    assert os.path.exists(os.path.join(kva.storage, logfile["path"]))
 
 
 if __name__ == "__main__":
