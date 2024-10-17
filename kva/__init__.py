@@ -47,8 +47,9 @@ def load_jsonl(path):
 
 class Source:
     """Class that syncs data & context to disk."""
-    def __init__(self, context):
+    def __init__(self, context, context_hash=None):
         self.context = context
+        self._context_hash = context_hash
         self.saved, self.context_is_dirty = load_jsonl(self.data_path)
         self.buffer = []
         atexit.register(self.write)
@@ -64,7 +65,7 @@ class Source:
         if context_hash in data_sources:
             return data_sources[context_hash]
         context = context or cached_load_json(os.path.join(storage_path(), f'{context_hash}.context.json'))
-        return Source(context)
+        return Source(context, context_hash)
     
     @property
     def data_path(self):
@@ -147,6 +148,8 @@ class DB:
             # For all other views, append (self, row_level_conditions) to their data_sources if needed
             accept_context, row_level_conditions = view.apply_conditions_to_context(self.context_hash)
             if accept_context:
+                if view._data_sources is None:
+                    breakpoint()
                 view._data_sources.append((self.context_hash, row_level_conditions))
             view._indexed.add(self.context_hash)
 
