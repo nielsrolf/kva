@@ -365,7 +365,6 @@ class DB:
     def _replace_files(self, data: Union[Dict[str, Any], List[Any]]) -> Union[Dict[str, Any], List[Any]]:
         """Replace file dictionaries with File objects."""
         if isinstance(data, dict):
-            print('yo')
             if 'path' in data and 'hash' in data and 'filename' in data:
                 return File(**data, base_path=storage_path())
             else:
