@@ -319,7 +319,7 @@ class DB:
         condition = {k: lambda v: v == context[k] for k in context}
         return self.filter(condition, context)
 
-    def latest(self, columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True, keep_rows_without_values=False) -> Union[Dict[str, Any], pd.DataFrame]:
+    def latest(self, columns: Union[str, List[str]], index: Optional[str] = None, deep_merge: bool = True, keep_rows_without_values=False, replace_files=True) -> Union[Dict[str, Any], pd.DataFrame]:
         """Get the latest values for the specified columns."""
         if columns == '*':
             columns = pd.DataFrame(self.data).columns
@@ -340,6 +340,8 @@ class DB:
             df = get_latest_nonnull(df, index, columns)
             if not keep_rows_without_values:
                 df = df.dropna(subset=[c for c in columns if c in df.columns], how='all')
+            if replace_files:
+                df = df.applymap(lambda x: self._replace_files(x))
             return df
 
         latest_data = {}
@@ -363,6 +365,7 @@ class DB:
     def _replace_files(self, data: Union[Dict[str, Any], List[Any]]) -> Union[Dict[str, Any], List[Any]]:
         """Replace file dictionaries with File objects."""
         if isinstance(data, dict):
+            print('yo')
             if 'path' in data and 'hash' in data and 'filename' in data:
                 return File(**data, base_path=storage_path())
             else:
