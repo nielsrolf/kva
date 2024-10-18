@@ -200,7 +200,7 @@ class DB:
     def data(self):
         rows = []
         data_sources = sorted(self.data_sources, key=lambda source: get_time_of_hash(source[0]))
-        for context_hash, row_level_conditions in self.data_sources:
+        for context_hash, row_level_conditions in data_sources:
             rows += self.resolve(context_hash, row_level_conditions)
         rows += self.logged_data.data
         return rows
