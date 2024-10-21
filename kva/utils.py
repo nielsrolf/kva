@@ -141,6 +141,9 @@ def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
     - for each of the columns, the last non-null value of the group is taken
     The result is a dataframe with the specified index and columns, where the values are the last non-null values of the group.
     """
+    # Set None and NaN values in index column to `None` to avoid grouping issues
+    for col in index:
+        df[col] = df[col].apply(lambda x: 'None' if pd.isnull(x) else x)
     columns = [col for col in columns if col in df.columns]
     if isinstance(index, str):
         index = [index]
