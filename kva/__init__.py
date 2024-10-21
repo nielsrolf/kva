@@ -337,7 +337,7 @@ class DB:
                 print(f"Available columns: {df.columns}")
                 return pd.DataFrame()
 
-            df = get_latest_nonnull(df, index, columns)
+            df = get_latest_nonnull(df, index, columns, deep_merge=deep_merge)
             if not keep_rows_without_values:
                 df = df.dropna(subset=[c for c in columns if c in df.columns], how='all')
             if replace_files:

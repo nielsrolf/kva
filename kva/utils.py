@@ -135,29 +135,41 @@ class Container:
         self.val = val
 
 
-def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str]):
+def get_latest_nonnull(df, index: Union[List[str], str], columns: List[str], deep_merge: bool = False):
     """Gets a dataframe and returns a new dataframe where:
     - the df is grouped by the index columns
     - for each of the columns, the last non-null value of the group is taken
     The result is a dataframe with the specified index and columns, where the values are the last non-null values of the group.
     """
+    if isinstance(index, str):
+        index = [index]
     # Set None and NaN values in index column to `None` to avoid grouping issues
     for col in index:
         df[col] = df[col].apply(lambda x: 'None' if pd.isnull(x) else x)
     columns = [col for col in columns if col in df.columns]
-    if isinstance(index, str):
-        index = [index]
     index = [col for col in index if col in df.columns]
     if not index or not columns:
         return pd.DataFrame()
 
-    def last_non_null(series):
-        val = series.dropna().iloc[-1] if not series.dropna().empty else None
-        if isinstance(val, dict):
-            return Container(val)
-        else:
-            return val
 
+    def last_non_null(series):
+        if not deep_merge:
+            val = series.dropna().iloc[-1] if not series.dropna().empty else None
+            if isinstance(val, dict):
+                return Container(val)
+            else:
+                return val
+        else:
+            vals = series.dropna().tolist()
+            if not vals:
+                return None
+            current = vals[0]
+            for val in vals[1:]:
+                current = _deep_merge(current, val)
+            if isinstance(current, dict):
+                return Container(current)
+            return current
+        
     grouped = df.groupby(index)
     result = grouped[columns].apply(lambda x: x.apply(last_non_null))
 
